@@ -30,14 +30,32 @@ notes记录直接可见的说明与不确定项。不要猜协议中的数字Sym
 只返回符合指定JSON schema的对象，作为人工核对草稿。'''
 
 
+def find_codex(executable=None):
+    if executable:
+        return str(Path(executable).expanduser().resolve())
+    # Desktop launches may inherit a PATH from before the CLI was installed.
+    candidates = []
+    local = os.environ.get('LOCALAPPDATA')
+    if local:
+        root = Path(local) / 'OpenAI' / 'Codex' / 'bin'
+        candidates.extend(sorted(root.glob('*/codex.exe'), key=lambda p: p.stat().st_mtime, reverse=True))
+    found = shutil.which('codex.exe') or shutil.which('codex')
+    if found:
+        candidates.insert(0, Path(found))
+    return next((str(p.resolve()) for p in candidates if p.is_file()), None)
+
+
 def codex_status(executable=None):
-    exe = executable or shutil.which('codex')
+    exe = find_codex(executable)
     if not exe:
-        return dict(available=False, authenticated=False, message='未找到Codex CLI，请设置codex.exe路径')
-    exe = str(Path(exe).resolve())
+        return dict(available=False, authenticated=False, message='未检测到Codex CLI；请安装CLI或通过--codex指定路径')
     flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-    p = subprocess.run([exe, 'login', 'status'], capture_output=True, encoding='utf-8', errors='replace',
-                       timeout=15, creationflags=flags)
+    try:
+        p = subprocess.run([exe, 'login', 'status'], capture_output=True, encoding='utf-8', errors='replace',
+                           timeout=15, creationflags=flags)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return dict(available=False, authenticated=False, executable=exe,
+                    message='Codex CLI无法启动：' + str(error)[:400])
     return dict(available=True, executable=exe, authenticated=p.returncode == 0,
                 message=(p.stdout or p.stderr).strip()[:600])
 
