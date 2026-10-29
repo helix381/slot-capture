@@ -1,0 +1,20 @@
+{
+  "checks": [
+    "connect: navigation and desktop render",
+    "rules: navigation and desktop render",
+    "verify: navigation and desktop render",
+    "capture: navigation and desktop render",
+    "capture: batch target and chart range stay consistent",
+    "rules: confirmation gates saving",
+    "connection: explicit failure states and progressive details",
+    "images: local import, deduplication and no inference",
+    "375px: no page horizontal overflow",
+    "768px: no page horizontal overflow",
+    "1024px: no page horizontal overflow",
+    "1440px: no page horizontal overflow",
+    "reduced motion: supported"
+  ],
+  "javascript_errors": [],
+  "backend_connected": false,
+  "visible_browser_opened": false
+}

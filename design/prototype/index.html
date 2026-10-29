@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot Capture · 界面设计稿</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="legibility.css">
+</head>
+<body>
+<div class="preview-tools"><div><span class="review-mark">SC / UI REVIEW</span><span>交互设计稿 · 未连接真实设备</span></div><div><label for="preview-state">状态预览</label><select id="preview-state"><option value="idle">待连接</option><option value="ready">已连接 · 示例</option><option value="changed">连接变化</option><option value="missing">未检测到心跳</option></select><button id="diffusion" class="text-button" aria-pressed="true">弥散背景：开</button></div></div>
+<div class="studio">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-icon">s<span></span></span><div>Slot Capture<small>机台研究工作台</small></div></div>
+    <p class="nav-caption">工作空间</p>
+    <nav aria-label="工作台导航">
+      <button class="nav-item active" data-view="connect" aria-current="page"><i data-icon="radar"></i><span>连接机台</span><span class="nav-number">01</span></button>
+      <button class="nav-item" data-view="rules"><i data-icon="layers"></i><span>规则档案</span><span class="nav-number">02</span></button>
+      <button class="nav-item" data-view="verify"><i data-icon="scan"></i><span>首转核验</span><span class="nav-number">03</span></button>
+      <button class="nav-item" data-view="capture"><i data-icon="chart"></i><span>实时采集</span><span class="nav-number">04</span></button>
+    </nav>
+    <div class="nav-divider"></div>
+    <div class="library-title"><p class="nav-caption">机台档案</p><button class="icon-button light-icon" id="new-machine" aria-label="新建机台档案"><i data-icon="plus"></i></button></div>
+    <button class="machine-item selected"><span class="machine-square">M</span><span>米亚的小酒馆<small>示例档案</small></span><span class="machine-dot"></span></button>
+    <button class="archive-link" id="manage-machines"><i data-icon="folder"></i>管理全部档案<i data-icon="arrow-right"></i></button>
+    <div class="sidebar-bottom"><div class="local-indicator"><span></span>本地工作空间</div><p>原始数据保存在本地<br>旋转操作由你完成</p><button class="sidebar-setting" id="settings"><i data-icon="settings"></i>工作台设置</button></div>
+  </aside>
+
+  <div class="workspace">
+    <header class="masthead"><div><div class="breadcrumb">工作台 <span>/</span> <span id="breadcrumb-page">连接机台</span></div><h1 id="page-title">开始新一次采集</h1><p id="page-subtitle">先确认连接，再把每一次结果记录清楚。</p></div><div class="header-actions"><span class="connection-badge" id="connection-badge"><span></span>尚未连接</span><button class="icon-button" id="history" aria-label="查看采集历史"><i data-icon="history"></i></button></div></header>
+    <div class="content-layout">
+      <main id="main-content">
+        <div class="stepper" aria-label="采集流程"><span class="current" data-step="connect"><b>1</b>连接机台</span><i></i><span data-step="rules"><b>2</b>确认规则</span><i></i><span data-step="verify"><b>3</b>首转核验</span><i></i><span data-step="capture"><b>4</b>正式采集</span></div>
+
+        <section class="view active" id="view-connect" aria-labelledby="connect-heading">
+          <div class="card hero">
+            <div class="hero-top"><span class="eyebrow">准备开始 / CONNECTION</span><span class="step-label">STEP 01</span></div>
+            <div class="hero-heading"><div><h2 id="connect-heading">连接你的机台</h2><p>在模拟器中打开目标机台，<br>接下来的连接检查交给工作台。</p></div><div class="device-orbit"><i data-icon="monitor"></i><span class="orbit-dot"></span><span class="orbit-tick"></span></div></div>
+            <label class="field-label" for="machine">当前机台</label><div class="machine-field"><span class="small-machine">M</span><select id="machine"><option>米亚的小酒馆</option><option>新建机台档案…</option></select><span class="subtle-pill">已建档</span></div>
+            <div class="hero-actions"><button class="primary-button" id="detect"><i data-icon="radar"></i><span>自动检测并连接</span><i data-icon="arrow-right"></i></button><span class="operation-hint">不点击游戏，不改变下注</span></div>
+            <div class="inline-notice" id="connection-notice" role="status" hidden></div>
+          </div>
+          <div class="status-grid">
+            <div class="card status-card"><span class="status-symbol"><i data-icon="monitor"></i></span><span class="status-caption">模拟器</span><strong id="device-state">等待检测</strong><small>自动发现在线设备</small></div>
+            <div class="card status-card"><span class="status-symbol"><i data-icon="game"></i></span><span class="status-caption">前台游戏</span><strong id="game-state">等待识别</strong><small>读取当前打开的应用</small></div>
+            <div class="card status-card"><span class="status-symbol"><i data-icon="pulse"></i></span><span class="status-caption">游戏心跳</span><strong id="heartbeat-state">尚未验证</strong><small>匹配双向通信后就绪</small></div>
+          </div>
+          <details class="card connection-details"><summary><span><i data-icon="sliders"></i>连接详情</span><span>自动填写，也可手动修正<i data-icon="chevron"></i></span></summary><div class="details-fields"><label>ADB 路径<input placeholder="检测后自动填写"></label><label>设备序列号<input placeholder="检测后自动填写"></label><label>游戏包名<input placeholder="检测后自动填写"></label><label>服务器地址<input placeholder="检测后自动填写"></label></div></details>
+          <div class="next-hint"><span class="round-icon"><i data-icon="arrow-right"></i></span><div><strong>连接就绪后，确认规则档案</strong><p>已通过首转的机台，可以直接开始下一批采集。</p></div><button class="text-button" data-go="rules">查看档案<i data-icon="arrow-right"></i></button></div>
+        </section>
+
+        <section class="view" id="view-rules" aria-labelledby="rules-heading">
+          <div class="card rules-header"><div><span class="eyebrow">机台知识 / MACHINE PROFILE</span><h2 id="rules-heading">把规则整理清楚</h2><p>AI 提取草稿，你来确认名称与玩法。</p></div><button class="secondary-button" id="import-main"><i data-icon="upload"></i>导入规则截图</button></div>
+          <div class="card table-card"><div class="section-title"><div><h3>Symbol 清单 <span class="count-badge">3</span></h3><p>示例内容 · 协议 ID 不通过图片猜测</p></div><button class="text-button" id="add-symbol"><i data-icon="plus"></i>新增</button></div><div class="table-scroll"><table><thead><tr><th>名称</th><th>类型</th><th>占格</th><th>协议 ID</th><th class="last-column">操作</th></tr></thead><tbody><tr><td><span class="symbol-monogram">W</span><strong>Wild</strong></td><td>替代符号</td><td><span class="dimension">1 × 5</span></td><td class="muted">待核对</td><td><button class="table-action">编辑</button></td></tr><tr><td><span class="symbol-monogram">S</span><strong>Scatter</strong></td><td>触发符号</td><td><span class="dimension">1 × 2</span></td><td class="muted">待核对</td><td><button class="table-action">编辑</button></td></tr><tr><td><span class="symbol-monogram">M</span><strong>女郎</strong></td><td>收集符号</td><td><span class="dimension">1 × 1</span></td><td class="muted">待核对</td><td><button class="table-action">编辑</button></td></tr></tbody></table></div></div>
+          <div class="card feature-card"><div class="section-title"><div><h3>特色玩法</h3><p>示例档案中待核对的玩法</p></div><button class="text-button" id="add-feature"><i data-icon="plus"></i>新增</button></div><div class="feature-list"><span><i data-icon="wheel"></i>转盘</span><span><i data-icon="layers"></i>Pick</span><span><i data-icon="trending"></i>倍率进化</span><span><i data-icon="gift"></i>Free Game</span></div></div>
+          <div class="save-bar"><label class="checkbox"><input type="checkbox" id="rules-confirmed">我已核对 Symbol 与玩法信息</label><button class="primary-button" id="save-rules" disabled>保存规则档案<i data-icon="arrow-right"></i></button></div>
+        </section>
+
+        <section class="view" id="view-verify" aria-labelledby="verify-heading">
+          <div class="card hero verify-hero"><div class="hero-top"><span class="eyebrow">先验证，再采集 / FIRST SPIN</span><span class="step-label">STEP 03</span></div><h2 id="verify-heading">只转一次，确认读得对</h2><p>开启监听后，在游戏内手动 Spin 一次。<br>如果触发奖励，按正常流程完成，工作台会等到整链结算。</p><div class="spin-visual"><div class="reel"><span>M</span><span>S</span><span>W</span></div><div class="scan-line"></div><span class="visual-caption">等待你的第一转</span></div><div class="verification-stages"><span class="current"><b>1</b>开启监听</span><span><b>2</b>手动旋转</span><span><b>3</b>奖励收尾</span><span><b>4</b>审计通过</span></div><button class="primary-button" id="verify-start"><i data-icon="scan"></i>开始首转监听<i data-icon="arrow-right"></i></button><div class="footnote"><i data-icon="info"></i>首转单独保存，不占正式采集轮数。</div></div>
+        </section>
+
+        <section class="view" id="view-capture" aria-labelledby="capture-heading">
+          <div class="card capture-setup"><div><span class="eyebrow">新建批次 / CAPTURE</span><h2 id="capture-heading">让每一转都有记录</h2></div><div class="batch-form"><label for="spin-count">付费旋转目标</label><div class="batch-input"><input id="spin-count" type="number" min="1" value="100"><span>次</span></div><button class="primary-button" id="capture-start"><i data-icon="play"></i>开始采集</button></div></div>
+          <div class="metric-grid"><div class="card metric"><span>付费旋转 / 目标</span><strong class="metric-accent">0<small> / <span id="target-label">100</span></small></strong><div class="progress-track"><span></span></div></div><div class="card metric"><span>当前 Bet</span><strong>—</strong><small>从首个有效结果自动读取</small></div><div class="card metric"><span>免费旋转</span><strong>0<small> 次</small></strong><small>不计入付费目标</small></div></div>
+          <div class="card chart-card"><div class="section-title"><div><h3>累计返奖趋势</h3><p>奖励链确认后更新，当前暂无数据</p></div><span class="subtle-pill">等待采集</span></div><div class="empty-chart"><div class="chart-lines"><span>—</span><span>—</span><span>—</span></div><div class="chart-empty-label"><i data-icon="chart"></i><strong>第一转之后，曲线从这里开始</strong><span>先看真实结果，再谈回报与波动</span></div><div class="chart-axis"><span>第 1 次</span><span>第 50 次</span><span>第 100 次</span></div></div></div>
+          <div class="card events-card"><div class="section-title"><div><h3>采集事件</h3><p>优先显示奖励结果与需要你处理的情况</p></div><button class="text-button" id="export">导出记录<i data-icon="arrow-up-right"></i></button></div><div class="event-empty"><span class="tiny-dot"></span>尚未开始采集</div></div>
+        </section>
+      </main>
+
+      <aside class="ai-panel" aria-labelledby="ai-heading"><div class="ai-panel-top"><span class="ai-glyph"><i data-icon="sparkles"></i></span><span class="small-label">规则助手</span><span class="ai-model">Luna · low</span></div><h2 id="ai-heading">规则整理，<br>从一张截图开始。</h2><p class="ai-intro">放入规则页，提取 Symbol 与特色玩法，再由你确认。</p><button class="drop-mini" id="open-import"><span class="upload-circle"><i data-icon="upload"></i></span><strong>添加规则截图</strong><span>拖入文件，或粘贴截图</span><small>PNG / JPG / WebP · 最多 12 张</small></button><div class="attachment-summary" id="attachment-summary" hidden></div><div class="assistant-note"><span class="note-marker"></span><p>不确定的信息会标成“待确认”，不会替你补出规则。</p></div><div class="assistant-compose"><label for="ai-note">补充说明 <span>选填</span></label><textarea id="ai-note" placeholder="例如：先整理 Base / Free 的规则"></textarea><button class="primary-button ai-submit" id="ai-generate" disabled><i data-icon="sparkles"></i>生成规则草稿<i data-icon="arrow-right"></i></button></div><div class="ai-footer"><i data-icon="lock"></i><span>点击识图后才发送截图<br>默认使用低思考深度</span></div></aside>
+    </div>
+    <footer class="workspace-footer"><span><i data-icon="harddrive"></i>本地保存</span><span>由你控制游戏，工作台负责记录。</span><span>Slot Capture</span></footer>
+  </div>
+</div>
+
+<dialog id="image-dialog" aria-labelledby="image-dialog-title"><form method="dialog" class="dialog-heading"><div><span class="eyebrow">规则资料 / IMPORT</span><h2 id="image-dialog-title">添加规则截图</h2></div><button class="icon-button" aria-label="关闭导入面板"><i data-icon="close"></i></button></form><div class="drop-zone" id="drop-zone" tabindex="0" aria-label="拖入图片或按Control加V粘贴"><span class="upload-circle"><i data-icon="upload"></i></span><strong>把规则截图拖到这里</strong><p>也可以按 <kbd>Ctrl</kbd> + <kbd>V</kbd> 粘贴截图</p><button class="secondary-button" id="pick-files">从文件选择</button><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" multiple hidden></div><div class="image-grid" id="image-grid"></div><p class="import-hint" id="import-hint" role="status">最多 12 张，单张不超过 20 MiB；导入只保存在本次设计稿页面。</p><div class="dialog-footer"><button class="text-button" id="clear-images">清空列表</button><button class="primary-button" id="use-images">使用这些截图<i data-icon="arrow-right"></i></button></div></dialog>
+<dialog id="archive-dialog" aria-labelledby="archive-title"><form method="dialog" class="dialog-heading"><h2 id="archive-title">机台档案</h2><button class="icon-button" aria-label="关闭档案管理"><i data-icon="close"></i></button></form><div class="archive-row"><span class="small-machine">M</span><div><strong>米亚的小酒馆</strong><p>示例档案 · 规则待确认</p></div><button class="text-button" id="archive-delete">删除档案</button></div><p class="import-hint">设计稿中的删除只演示交互，不会修改真实机台档案。</p></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body></html>

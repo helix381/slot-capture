@@ -4,6 +4,8 @@ Windows本地采集器，提供图形界面与命令行。把已验证的采集�
 
 项目版本暂保留0.2.3。**日常修复和小功能用Git提交记录，不增加版本号或版本目录。** 默认构建固定输出 `dist/slot-capture.exe` 与 `dist/slot-capture-gui.exe`；正式发布时再统一更新版本和tag。完整操作流程见 [机台录入与首转流程](docs/onboarding-v0.2.md)，开发与数据排除约定见 [贡献说明](CONTRIBUTING.md)。
 
+界面重设计的[离线交互稿](design/prototype/index.html)与[设计说明](design/DESIGN.md)供用户确认：黑白灰基底、橙红强调、轻弥散与分区卡片。该稿不会连接设备或调用模型，尚未替换正式GUI。
+
 v0.2.3：“选择规则截图”打开本地图片导入面板，支持文件拖入、Ctrl+V粘贴截图/复制的图片文件、连续追加、预览、移除和去重。最多12张、单张20MiB；图片先缓存本地，只有用户点击识图后才发送给Codex。识图默认显式指定`gpt-6-luna`与`model_reasoning_effort="low"`，不再使用不确定的CLI默认模型，不自动升级到其他模型。Luna在官方指南中定位为经济型提取模型，本地目录支持图片且最低深度为low；未取得所有模型的账户扣额对照，不宣称已证明绝对最低费用。
 
 v0.2.2修复UID获取过于依赖单一字段的问题：兼容`userId`/`appId`及Android用户空间，并依次回退到`cmd package list packages -U`与`pm list packages -U`。前台活动与焦点窗口交叉检查；失败保留设备与包名、退出“检测中”。检测命令、返回码和输出摘要写入本地`data/diagnostics`；可在连接详情点击“打开检测诊断”。尚未取得用户现场失败的原始返回，具体原因以新诊断为准。
