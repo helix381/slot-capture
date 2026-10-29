@@ -422,20 +422,25 @@ class WorkflowApp:
             self.choose_candidate('选择模拟器', [f"{r['model']}  ·  {r['device']}" for r in rows],
                                   lambda i: self.detect_connection(rows[i]['device'], rows[i]['adb']))
         elif stage == 'choose_server':
-            self.show_detected(cap)
+            self.show_detected(cap,'请选择候选连接')
             rows = result['candidates']
             self.choose_candidate('选择候选连接', [f"{r['ip']}  ·  端口 {', '.join(map(str, r['ports']))}" for r in rows],
                                   lambda i: self.use_detected(dict(cap, game_ip=rows[i]['ip'])))
         elif stage in ('detected', 'candidate'):
             self.use_detected(cap)
         elif stage == 'probe_cleanup_required':
+            self.show_detected(cap,'探测未安全结束')
+            self.details_open.set(True);self.toggle_details()
             self.notice.set(result['message'])
         else:
+            label={'heartbeat_missing':'未检测到游戏心跳','server_changed':'连接已变化，请重新检测'}.get(stage,'未连接')
+            self.show_detected(cap,label)
             self.detected_summary.set(self.detected_summary.get()+'\n状态：检测未通过')
             self.details_open.set(True); self.toggle_details()
 
-    def show_detected(self, cap):
-        self.detected_summary.set(f"设备：{cap.get('device') or '待检测'}\n游戏：{cap.get('package') or '待检测'}\n连接：{cap.get('game_ip') or '待选择'}")
+    def show_detected(self, cap, connection_label=None):
+        label=connection_label or cap.get('game_ip') or '未连接'
+        self.detected_summary.set(f"设备：{cap.get('device') or '未识别'}\n游戏：{cap.get('package') or '未识别'}\n连接：{label}")
 
     def use_detected(self, cap):
         self.detected_android_user=cap.get('android_user')

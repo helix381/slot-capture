@@ -49,6 +49,10 @@ class ADB:
             raise RuntimeError('Remote PID command changed; refusing to signal it')
         self.run('shell', f"su -c 'kill -2 {pid}'")
 
+
+class SocketUnavailableError(RuntimeError):
+    code='socket_unavailable'
+
 def doctor(cap):
     for k in ['adb', 'device', 'game_ip', 'package']:
         if not cap.get(k):
@@ -68,7 +72,7 @@ def doctor(cap):
                 if item['ip'] == cap['game_ip']:
                     sockets += [dict(ip=item['ip'],port=p,state='01') for p in item['ports']]
     if not sockets:
-        raise RuntimeError('Configured IPv4 server has no socket belonging to target UID; verify the address again')
+        raise SocketUnavailableError('候选连接已断开或变化，尚未启动抓包')
     tool = adb.run('shell', f"su -c 'command -v {cap['tcpdump']}'").stdout.decode(errors='replace').strip()
     if not tool:
         raise RuntimeError('tcpdump not available under existing permissions')
@@ -171,6 +175,7 @@ def worker(root, token):
     journal = Journal(root)
     manifest = dict(run_id=plan['run_id'], created_utc=utc(), worker=process_identity(os.getpid()),
                     remote_prefix=prefix, remote_pid=None, remote_argv=None,
+                    capture_launch_attempted=False,
                     device=cap['device'], no_game_action_sent=True)
     write(root / 'manifest.json', manifest)
     rec = None
@@ -179,6 +184,7 @@ def worker(root, token):
     log = None
     final_state = 'FAILED'
     failure = None
+    failure_code = None
     deadline = time.monotonic() + cap['seconds']
     drain_started = None
     last_activity = time.monotonic()
@@ -192,6 +198,8 @@ def worker(root, token):
                    f"-w {prefix}.pcap tcp and host {cap['game_ip']}'")
         log = (root / 'tcpdump.log').open('ab', buffering=0)
         flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        manifest['capture_launch_attempted']=True
+        write(root/'manifest.json',manifest)
         child = subprocess.Popen(adb.argv + ['shell', command], stdin=subprocess.DEVNULL,
                                  stdout=log, stderr=log, creationflags=flags)
         manifest['adb_host'] = process_identity(child.pid)
@@ -263,10 +271,12 @@ def worker(root, token):
                 raise RuntimeError('Reward tail timeout; preserve incomplete evidence and pause paid spins')
             time.sleep(cap['poll_seconds'])
         else:
-            failure = 'Capture duration expired; pause new paid spins'
+            failure = '等待游戏心跳超时' if plan.get('purpose')=='connection' else 'Capture duration expired; pause new paid spins'
+            failure_code = 'heartbeat_timeout' if plan.get('purpose')=='connection' else 'capture_timeout'
             final_state = 'STOPPED_INCOMPLETE'
     except Exception as exc:
         failure = str(exc)
+        failure_code = getattr(exc,'code','capture_failed')
         final_state = 'STOPPED_INCOMPLETE'
         journal.emit('capture_failed', {'error': failure, 'action': 'Pause new paid spins.'}, severity='critical')
     finally:
@@ -300,6 +310,7 @@ def worker(root, token):
                 failure = (failure or '') + '; remote capture PID not verified; inspect task prefix before manual cleanup'
         except Exception as exc:
             failure = (failure or '') + '; archive/ownership check: ' + str(exc)
+            failure_code = 'archive_failed'
             final_state = 'STOPPED_INCOMPLETE'
         if rec:
             rec.out.close()
@@ -326,6 +337,7 @@ def worker(root, token):
         final = dict(state=final_state, checked_utc=utc(), run_id=plan['run_id'],
                      detected_bet=plan.get('bet'), purpose=plan.get('purpose', 'sampling'),
                      event_cursor=journal.cursor, error=failure, **(compact(report) if report else {}))
+        final['failure_code']=failure_code
         write(root/'status.json', final)
         (root/'owner.lock').unlink(missing_ok=True)
     return final

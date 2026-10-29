@@ -100,6 +100,13 @@ def ipv4_sockets(text, uid):
     return [dict(ip=ip, ports=sorted(ports)) for ip, ports in sorted(results.items())]
 
 
+def probe_cleanup_status(manifest):
+    if manifest.get('remote_stopped_verified'):return 'verified'
+    if (manifest.get('capture_launch_attempted') is False and not manifest.get('adb_host')
+            and not manifest.get('remote_pid')):return 'not_started'
+    return 'unverified'
+
+
 def probe_ip(cap, ip, store):
     """Bounded passive check, using the existing audited ownership/cleanup path."""
     from .cli import init_run
@@ -113,9 +120,12 @@ def probe_ip(cap, ip, store):
     (root/'owner.lock').write_text(token, encoding='utf-8')
     with contextlib.redirect_stdout(io.StringIO()):
         report = worker(root, token)
+    manifest=read(root/'manifest.json')
+    cleanup_status=probe_cleanup_status(manifest)
     return dict(ip=ip, matched=report['state']=='COMPLETE' and bool(report.get('heartbeat_matched')),
                 run=str(root.resolve()), error=report.get('error'),
-                cleanup_verified=bool(read(root/'manifest.json').get('remote_stopped_verified')))
+                failure_code=report.get('failure_code'),cleanup_status=cleanup_status,
+                cleanup_verified=cleanup_status in ('verified','not_started'))
 
 
 def _discover(store, adb_hint=None, device=None, package=None, probe=True, trace=None):
@@ -191,7 +201,10 @@ def _discover(store, adb_hint=None, device=None, package=None, probe=True, trace
                 probes.append(result)
                 if not result['cleanup_verified']:
                     return dict(stage='probe_cleanup_required', **base, probes=probes,
-                                message='候选探测进程未确认收尾，请检查记录；未继续探测其他连接。')
+                                message='探测进程未确认安全停止，已暂停检测；请打开检测诊断查看原因。')
+                if result.get('cleanup_status')=='not_started' and result.get('failure_code')!='socket_unavailable':
+                    return dict(stage='probe_failed',**base,probes=probes,
+                                message='探测未能启动：'+str(result.get('error') or '请查看检测诊断'))
             except Exception as exc:
                 # Unexpected probe startup failures must not silently launch another capture.
                 return dict(stage='probe_failed', **base, probes=probes, message=str(exc))
@@ -199,6 +212,11 @@ def _discover(store, adb_hint=None, device=None, package=None, probe=True, trace
     if len(matched)==1:
         return dict(stage='detected', **dict(base,capture=dict(cap,game_ip=matched[0])), probes=probes,
                     message='已自动识别设备、前台应用及游戏心跳连接。')
+    if probes and not matched:
+        changed=all(p.get('failure_code')=='socket_unavailable' for p in probes)
+        return dict(stage='server_changed' if changed else 'heartbeat_missing',**base,probes=probes,
+                    message='检测期间候选连接已变化，请重新检测。' if changed else
+                    '尚未匹配到游戏心跳。请保持目标机台打开，待连接稳定后重新检测。')
     if len(candidates)==1:
         return dict(stage='candidate', **dict(base,capture=dict(cap,game_ip=candidates[0]['ip'])),probes=probes,
                     message='已读取唯一候选连接，将继续执行正式心跳核验。')

@@ -3,7 +3,8 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
-from slotcapture.discovery import discover, device_rows, foreground_package, ipv4_sockets, adb_candidates
+from slotcapture.discovery import discover, device_rows, foreground_package, ipv4_sockets, adb_candidates, probe_ip, probe_cleanup_status
+from slotcapture.runtime import SocketUnavailableError
 
 
 def sockets(ip='C633640A', uid=10042, state='01', port='1F90'):
@@ -116,6 +117,40 @@ class DiscoveryTests(unittest.TestCase):
         commands=[q['command'] for q in diagnostic['inspection']]
         self.assertIn('pm list packages -U --user 0 com.example.game',commands)
         self.assertTrue(diagnostic['no_game_action_sent'])
+
+    def test_disappeared_candidate_does_not_discard_previous_heartbeat_match(self):
+        self.tcp+=sockets(ip='CB007108')
+        results=[dict(ip='10.100.51.198',matched=True,cleanup_verified=True),
+                 dict(ip='8.113.0.203',matched=False,cleanup_verified=True,cleanup_status='not_started',failure_code='socket_unavailable')]
+        with patch('slotcapture.discovery.probe_ip',side_effect=results):
+            result=self.run_discovery()
+        self.assertEqual(result['stage'],'detected')
+        self.assertEqual(result['capture']['game_ip'],'10.100.51.198')
+
+    def test_no_heartbeat_is_not_presented_as_a_connection_choice(self):
+        self.tcp+=sockets(ip='CB007108')
+        with patch('slotcapture.discovery.probe_ip',return_value=dict(matched=False,cleanup_verified=True,failure_code='heartbeat_timeout')):
+            result=self.run_discovery()
+        self.assertEqual(result['stage'],'heartbeat_missing')
+        with patch('slotcapture.discovery.probe_ip',return_value=dict(matched=False,cleanup_verified=True,cleanup_status='not_started',failure_code='socket_unavailable')):
+            result=self.run_discovery()
+        self.assertEqual(result['stage'],'server_changed')
+
+    def test_socket_preflight_failure_proves_no_capture_was_started(self):
+        cap=dict(adb='fake',device='fake',package='com.example.game')
+        with patch('slotcapture.runtime.doctor',side_effect=SocketUnavailableError('socket changed')), \
+             patch('slotcapture.runtime.subprocess.Popen') as launch:
+            result=probe_ip(cap,'203.0.113.10',self.root)
+        launch.assert_not_called()
+        self.assertEqual(result['cleanup_status'],'not_started')
+        self.assertTrue(result['cleanup_verified'])
+        self.assertEqual(result['failure_code'],'socket_unavailable')
+
+    def test_unknown_or_unverified_launch_never_counts_as_clean(self):
+        self.assertEqual(probe_cleanup_status(dict(remote_pid=None)),'unverified')
+        self.assertEqual(probe_cleanup_status(dict(capture_launch_attempted=True,remote_pid=None)),'unverified')
+        self.assertEqual(probe_cleanup_status(dict(capture_launch_attempted=False,remote_pid=123)),'unverified')
+        self.assertEqual(probe_cleanup_status(dict(remote_stopped_verified=True)),'verified')
 
     def test_hint_only_accepted_when_file_exists(self):
         hint=self.root/'adb.exe';hint.write_bytes(b'test')

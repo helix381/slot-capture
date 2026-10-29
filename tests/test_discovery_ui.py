@@ -54,6 +54,17 @@ class DiscoveryControllerTests(unittest.TestCase):
         self.assertNotIn('检测中',app.detected_summary.get())
         self.assertEqual(app.last_diagnostic,'diagnostic.json')
 
+    def test_probe_failure_never_claims_connection_waiting_for_selection(self):
+        app=self.app();app.details_open=Value(False);app.toggle_details=lambda:None
+        app.discovered(dict(stage='probe_cleanup_required',capture=dict(device='emulator-5554',package='com.game'),
+                            message='未确认安全停止'))
+        self.assertIn('探测未安全结束',app.detected_summary.get())
+        self.assertNotIn('待选择',app.detected_summary.get())
+        self.assertTrue(app.details_open.get())
+        app.discovered(dict(stage='heartbeat_missing',capture=dict(device='emulator-5554',package='com.game'),
+                            message='尚未匹配到心跳'))
+        self.assertIn('未检测到游戏心跳',app.detected_summary.get())
+
     def test_new_version_reuses_existing_library_without_copying(self):
         with tempfile.TemporaryDirectory() as temp:
             base=Path(temp)/'dist';old=base/'v0.2.0'/'data'/'machines';old.mkdir(parents=True)
