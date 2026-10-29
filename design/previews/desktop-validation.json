@@ -4,9 +4,11 @@
     "rules: manual edit, safe text rendering, saved without network, sampling gated",
     "images: dedup, explicit paste and recognition, notes forwarded, manual confirmation reset",
     "connection: failure, multi-device choice, live heartbeat proof gates first spin",
+    "next step: explicit gated destination; navigation does not start a spin or capture",
     "first spin: final audit confirmation and independent counters",
     "sampling: target/Bet/free, active edit lock, stale-state warning, tail and final audit",
     "profiles: confirmed delete, cancellation and undo",
+    "notices: fixed dismissible layer; repeated status stays closed; new condition reopens without shifting layout",
     "window controls: explicit minimize/maximize/restore/close bridge; close never stops capture",
     "layout: no clipped controls/scrolling at 960x640,1200x720,1280x800,1440x900; fixed sidebar, contextual assistant, long lists paginate",
     "JavaScript: zero uncaught errors"

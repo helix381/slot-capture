@@ -35,13 +35,12 @@
       </div>
     </div>
     <header class="masthead"><div><div class="breadcrumb">工作台 <span>/</span> <span id="breadcrumb-page">连接机台</span></div><h1 id="page-title">开始新一次采集</h1><p id="page-subtitle">先确认连接，再把每一次结果记录清楚。</p></div><div class="header-actions"><span class="connection-badge" id="connection-badge"><span></span>尚未连接</span><button class="icon-button" id="history" aria-label="查看采集历史"><i data-icon="history"></i></button></div></header>
-    <div id="work-status" role="status" aria-live="polite" hidden></div><div class="content-layout">
+    <div id="work-status" role="status" aria-live="polite" hidden><button id="status-details" title="查看完整提示"><span id="status-message"></span></button><button id="status-close" aria-label="关闭提示" title="关闭提示"><i data-icon="close"></i></button></div><div class="content-layout">
       <main id="main-content">
 
-        <section class="view active" id="view-connect" aria-labelledby="connect-heading">
+        <section class="view active" id="view-connect" aria-labelledby="page-title">
           <div class="card hero">
-            <div class="hero-top"><span class="eyebrow">准备开始 / CONNECTION</span><span class="step-label">STEP 01</span></div>
-            <div class="hero-heading"><div><h2 id="connect-heading">连接你的机台</h2><p>在模拟器中打开目标机台，<br>接下来的连接检查交给工作台。</p></div><div class="device-orbit"><i data-icon="monitor"></i><span class="orbit-dot"></span><span class="orbit-tick"></span></div></div>
+            <div class="connection-header-slot"></div>
             <label class="field-label" for="machine">当前机台</label><div class="machine-field"><span class="small-machine">M</span><select id="machine"><option value="">新建机台档案</option></select><span class="subtle-pill" id="profile-state">未建档</span></div>
             <div class="hero-actions"><button class="primary-button" id="detect"><i data-icon="radar"></i><span>自动检测并连接</span><i data-icon="arrow-right"></i></button><span class="operation-hint">不点击游戏，不改变下注</span></div>
             <div class="inline-notice" id="connection-notice" role="status" hidden></div>
@@ -52,7 +51,7 @@
             <div class="card status-card"><span class="status-symbol"><i data-icon="pulse"></i></span><span class="status-caption">游戏心跳</span><strong id="heartbeat-state">尚未验证</strong><small>匹配双向通信后就绪</small></div>
           </div>
           <button class="card connection-details" id="connection-options"><span><i data-icon="sliders"></i>连接详情与手动修正</span><span>自动填写 · 点击查看<i data-icon="arrow-up-right"></i></span></button>
-          <div class="next-hint"><span class="round-icon"><i data-icon="arrow-right"></i></span><div><strong>连接就绪后，确认规则档案</strong><p>已通过首转的机台，可以直接开始下一批采集。</p></div><button class="text-button" data-go="rules">查看档案<i data-icon="arrow-right"></i></button></div>
+          <div class="next-hint card"><div><strong id="connection-next-title">下一步：确认规则</strong><p id="connection-next-description">先完成上方连接检测，再核对机台规则。</p></div><button class="primary-button" id="connection-next" disabled><span>下一步：确认规则</span><i data-icon="arrow-right"></i></button></div>
         </section>
 
         <section class="view" id="view-rules" aria-labelledby="rules-heading">

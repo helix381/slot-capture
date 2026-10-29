@@ -65,6 +65,9 @@ def main():
             assert page.locator('#app-version').inner_text()=='v0.3.0'
             assert page.locator('#paid-count').inner_text()=='0'
             assert page.evaluate('__mock.calls.length')==0
+            assert page.locator('.connection-header-slot .masthead').count()==1
+            assert page.locator('#view-connect .hero').bounding_box()['height']<200
+            assert page.locator('#connection-next').is_disabled()
             page.screenshot(path=str(output/'desktop-connect.png'),full_page=True,animations='disabled')
             checks.append('bootstrap: empty real UI; no automatic discovery, model or clipboard calls')
             # Manual recording and save must work without a screenshot or connection.
@@ -105,12 +108,20 @@ def main():
             page.evaluate('poll()')
             assert page.locator('#capture-start').is_disabled()
             page.evaluate('__mock.finish();poll()');page.wait_for_function('state.ready')
+            assert '首转核验' in page.locator('#connection-next').inner_text()
             checks.append('connection: failure, multi-device choice, live heartbeat proof gates first spin')
             # First-spin data must not leak into formal counters.
-            page.locator('[data-view=verify]').click();page.locator('#verify-start').click();page.wait_for_function('!state.busy')
+            page.locator('#connection-next').click();assert page.locator('#view-verify').is_visible()
+            page.locator('#verify-start').click();page.wait_for_function('!state.busy')
             page.evaluate('__mock.finish();poll()');page.wait_for_function('state.profile.first_spin_verified')
             assert page.locator('#paid-count').inner_text()=='0'
             assert '通过' in page.locator('#verify-caption').inner_text()
+            page.locator('[data-view=connect]').click()
+            assert '正式采集' in page.locator('#connection-next').inner_text()
+            page.locator('#connection-next').click();assert page.locator('#view-capture').is_visible()
+            assert page.evaluate('__mock.calls.filter(c=>c.name==="start_session").length')==1
+            checks.append('next step: explicit gated destination; navigation does not start a spin or capture')
+            page.locator('[data-view=verify]').click()
             page.screenshot(path=str(output/'desktop-verify.png'),full_page=True,animations='disabled')
             checks.append('first spin: final audit confirmation and independent counters')
             page.locator('[data-view=capture]').click();page.locator('#spin-count').fill('100');page.locator('#capture-start').click();page.wait_for_function('!state.busy')
@@ -133,6 +144,18 @@ def main():
             page.locator('#undo-delete').click();page.wait_for_function('!state.busy');assert page.locator('.archive-delete').count()==1
             page.locator('#archive-dialog .icon-button').click()
             checks.append('profiles: confirmed delete, cancellation and undo')
+            # Dismiss a floating notice without changing layout or stopping a task.
+            before=page.locator('.content-layout').bounding_box()
+            page.evaluate('message("离屏重复异常", "error", "same-error")')
+            assert page.locator('#work-status').evaluate('(el)=>getComputedStyle(el).position')=='fixed'
+            page.locator('#status-close').click();assert page.locator('#work-status').is_hidden()
+            page.evaluate('message("离屏重复异常", "error", "same-error")')
+            assert page.locator('#work-status').is_hidden()
+            page.evaluate('message("新的异常", "error", "new-error")')
+            assert page.locator('#work-status').is_visible()
+            page.locator('#status-close').click()
+            assert page.locator('.content-layout').bounding_box()==before
+            checks.append('notices: fixed dismissible layer; repeated status stays closed; new condition reopens without shifting layout')
             # Fixed chrome, single-screen pages and paginated long data.
             for action in ['minimize','maximize','maximize','close']:
                 page.locator('#window-'+action).click()
@@ -162,6 +185,10 @@ def main():
                     before=page.locator('.sidebar').bounding_box();page.mouse.wheel(0,700)
                     assert page.locator('.sidebar').bounding_box()==before
                     assert page.evaluate('scrollY')==0
+                    if view=='connect':
+                        assert page.locator('.connection-header-slot .masthead').count()==1
+                        assert page.locator('#view-connect .hero').bounding_box()['height']<200
+                    else:assert page.locator('.workspace > .masthead').count()==1
                 assert page.locator('#library-pager button').count()==2
                 page.locator('[data-view=rules]').click()
                 page.evaluate('state.pages.symbols=0;renderRules()')
@@ -170,7 +197,7 @@ def main():
                 if width in (960,1280):
                     for view in ['connect','rules','verify','capture']:
                         page.locator(f'[data-view={view}]').click()
-                        page.locator('#toast').evaluate('(el)=>el.hidden=true')
+                        page.evaluate('dismissNotice()')
                         page.screenshot(path=str(output/f'fixed-{view}-{width}.png'),animations='disabled')
             page.emulate_media(reduced_motion='reduce')
             checks.append('layout: no clipped controls/scrolling at 960x640,1200x720,1280x800,1440x900; fixed sidebar, contextual assistant, long lists paginate')

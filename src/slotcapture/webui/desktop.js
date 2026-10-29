@@ -8,7 +8,7 @@ const labels={PREPARED:'计划已建立',STARTING:'正在连接',CHECKING_CONNEC
   WAITING_FOR_SPIN:'等待你在游戏内旋转',CAPTURING:'正在记录结果',DRAINING:'请停止新增付费，等待奖励链收尾',
   COMPLETE:'最终审计完成',STOPPED_EARLY:'提前结束',STOPPED_INCOMPLETE:'数据不完整',FAILED:'采集失败'};
 const purposes={connection:'连接核验',first_spin:'首转核验',sampling:'正式采集'};
-const views={connect:['连接机台','开始新一次采集','先确认连接，再把每一次结果记录清楚。'],
+const views={connect:['连接机台','连接机台','先在模拟器中打开目标机台，再检测连接。'],
   rules:['规则档案','让规则成为可复用的档案','提取、核对、保存，下一次不用重新开始。'],
   verify:['首转核验','先验证这一转，再记录下一百转','奖励链完整、最终审计通过后，才算准备好。'],
   capture:['实时采集','专注这一批，看清每一个结果','Bet 自动读取，免费次数另计，奖励链收完再结束。']};
@@ -20,12 +20,23 @@ function changeView(name){
   ['breadcrumb-page','page-title','page-subtitle'].forEach((id,i)=>$('#'+id).textContent=views[name][i]);
   $('.content-layout').classList.toggle('rules-mode',name==='rules');
   $('.ai-panel').hidden=name!=='rules';
+  $('.workspace').classList.toggle('connection-page',name==='connect');
+  const header=$('.masthead');
+  if(name==='connect')$('.connection-header-slot').append(header);
+  else $('.workspace').insertBefore(header,$('#work-status'));
   renderRules();renderEvents();
   location.hash=name;
 }
-let toastTimer;
-function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
-function message(text,kind=''){const el=$('#work-status');el.textContent=text;el.title=text;el.className=kind;el.hidden=!text;}
+let noticeTimer,lastNoticeKey=null,dismissedNoticeKey=null;
+function dismissNotice(){dismissedNoticeKey=lastNoticeKey;$('#work-status').hidden=true;clearTimeout(noticeTimer);}
+function toast(text){if($('#status-message').textContent!==text)message(text);}
+function message(text,kind='',key=null){
+  const el=$('#work-status');key=key||kind+':'+text;
+  $('#status-message').textContent=text;$('#status-details').title=text;el.className=kind;
+  if(key===lastNoticeKey){el.hidden=!text||dismissedNoticeKey===key;return;}
+  lastNoticeKey=key;dismissedNoticeKey=null;clearTimeout(noticeTimer);el.hidden=!text;
+  if(text&&!kind)noticeTimer=setTimeout(dismissNotice,6000);
+}
 function node(tag,text,cls){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
 async function api(method,...args){
   if(!window.pywebview?.api?.[method])throw Error('桌面接口尚未就绪，请稍候；独立浏览器页面无法执行采集。');
@@ -61,6 +72,21 @@ function gates(){
   $('#capture-start').disabled=locked||!state.ready||state.dirty||!p?.first_spin_verified;
   $('#verify-start').disabled=locked||!state.ready||state.dirty||!p?.rules_confirmed||!p?.symbols?.length;
   $('#verified-shortcut').hidden=!p?.first_spin_verified||state.dirty;
+  const next=$('#connection-next');let target='rules',label='下一步：确认规则';
+  let title='下一步：确认规则',description='先点击“自动检测并连接”，等待游戏心跳核验通过。';
+  if(state.active){
+    if(state.purpose==='connection'){title='正在核验游戏心跳';label='等待连接核验…';description='保持目标机台打开，检测完成后即可继续。';}
+    else{target=state.purpose==='first_spin'?'verify':'capture';label=target==='verify'?'查看首转核验':'查看当前采集';title='当前监听尚未结束';description='先完成当前任务，再开始下一步。';}
+  }else if(state.ready){
+    title='连接已就绪';description='核对 Symbol 与特色玩法，然后保存机台规则。';
+    if(!state.dirty&&p?.rules_confirmed&&p?.symbols?.length){
+      if(p.first_spin_verified){target='capture';label='下一步：正式采集';description='此规则已通过首转核验，可以设置本批次付费次数。';}
+      else{target='verify';label='下一步：首转核验';description='规则已确认。下一步手动旋转一次，验证结果与奖励结算。';}
+    }
+  }
+  next.dataset.target=target;next.querySelector('span').textContent=label;
+  next.disabled=state.busy||state.active&&state.purpose==='connection'||!state.active&&!state.ready;
+  $('#connection-next-title').textContent=title;$('#connection-next-description').textContent=description;
 }
 async function task(text,fn){
   if(state.busy){toast('上一步仍在执行，请稍候。');return;}
@@ -256,7 +282,7 @@ async function poll(){
         const text=s.state==='COMPLETE'?(d.purpose==='connection'?'游戏心跳已核验。可以确认规则或进入首转。':d.purpose==='first_spin'&&d.profile?.first_spin_verified?'首转最终审计通过，可以开始正式采集。':`${scope}完成，记录已保存。`):`${scope}结束：${labels[s.state]}。请查看事件和记录。`;
         message(text,s.state==='COMPLETE'?'':'error');toast(text);
       }
-    }else if(state.active)message(`${scope} · ${labels[s.state]||s.state} · 更新 ${new Date(s.checked_utc).toLocaleTimeString('zh-CN')}`);
+    }else if(state.active)message(`${scope} · ${labels[s.state]||s.state} · 更新 ${new Date(s.checked_utc).toLocaleTimeString('zh-CN')}`,'',state.run+':'+s.state);
     if(d.purpose==='first_spin'){
       const passed=s.state==='COMPLETE'&&!!d.profile?.first_spin_verified;
       $('#verify-caption').textContent=passed?'首转最终审计通过':labels[s.state]||s.state;
@@ -333,9 +359,9 @@ $('#add-symbol').onclick=()=>editRow('symbols');$('#add-feature').onclick=()=>ed
 $('#connection-options').onclick=()=>$('#connection-dialog').showModal();
 $('#edit-notes').onclick=()=>$('#notes-dialog').showModal();
 $('#show-events').onclick=()=>{state.pages.events=0;renderFullEvents();$('#events-dialog').showModal();};
-function showStatus(){if(!$('#work-status').textContent)return;$('#text-title').textContent='状态详情';$('#text-body').textContent=$('#work-status').textContent;$('#text-dialog').showModal();}
-$('#work-status').onclick=showStatus;$('#work-status').tabIndex=0;$('#work-status').setAttribute('role','button');
-$('#work-status').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showStatus();}};
+function showStatus(){if(!$('#status-message').textContent)return;$('#text-title').textContent='状态详情';$('#text-body').textContent=$('#status-message').textContent;$('#text-dialog').showModal();}
+$('#status-details').onclick=showStatus;$('#status-close').onclick=dismissNotice;
+$('#connection-next').onclick=()=>{if(!$('#connection-next').disabled)changeView($('#connection-next').dataset.target);};
 async function windowCommand(action){
   try{const result=await api('window_command',action);document.body.classList.toggle('window-maximized',result.maximized);}
   catch(e){toast(e.message);}
