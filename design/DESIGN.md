@@ -32,8 +32,12 @@
 
 ## 技术边界
 
-正式GUI仍是Tkinter，本稿使用HTML/CSS校准视觉，不能直接将CSS套到现有Tk控件。用户确认后再接入合适的桌面承载方式，沿用现有JSON CLI和采集引擎。此次不迁移框架、不改采集逻辑、不更新EXE或版本号。
+正式GUI在v0.3.0使用pywebview + Edge WebView2承载，应用资源位于`src/slotcapture/webui`，桥接入口为`desktop.py`，沿用现有JSON CLI和采集引擎。旧Tk页面保留用于兼容既有测试。`design/prototype`始终是独立设计稿，不会调用后端。
+
+正式页面去掉了预览状态开关、示例档案与演示按钮，提供可编辑规则、手动建档、可撤销删除和真实状态。返奖区显示暂计值/最终审计值，未构造收益曲线；首转与正式批次分别展示，进程或更新时间失效会提示暂停新增付费。截图导入先缓存本地，只有主动点击识图才调用Codex。连接参数自动填写，折叠区可以修正。
 
 ## 离屏验证
 
 `requirements-design.txt` 是可选的设计渲染依赖，与正式程序依赖分开。运行 `python design/render_preview.py` 使用独立的无界面浏览器上下文，只打开本地设计稿，不触碰用户浏览器会话、剪贴板或模拟器。截图保存到 `design/previews/`。
+
+`python design/check_desktop.py`验证正式HTML与假的桌面API交互，截图`desktop-*`中出现的机台与金额均为标明的测试数据，不能作为真实采集证据。桌面原生窗口、实际剪贴板、设备与模型仍由用户现场验收。

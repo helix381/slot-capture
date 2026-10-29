@@ -4,13 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "slot-capture-local"
-version = "0.2.3"
+version = "0.3.0"
 description = "Passive local Slot capture controller with a JSON CLI"
 requires-python = ">=3.11"
-dependencies = ["dpkt==1.9.8", "psutil>=7,<8", "Pillow>=11,<13", "tkinterdnd2==0.4.3"]
+dependencies = ["dpkt==1.9.8", "psutil>=7,<8", "Pillow>=11,<13", "tkinterdnd2==0.4.3", "pywebview==6.2.1", "pythonnet==3.2.1; sys_platform == 'win32'"]
 
 [project.scripts]
 slot-capture = "slotcapture.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+slotcapture = ["webui/*.html", "webui/*.css", "webui/*.js"]

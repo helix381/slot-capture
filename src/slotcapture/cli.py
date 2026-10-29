@@ -133,6 +133,7 @@ def parser():
         if name in ('vision-status', 'vision-read'): c.add_argument('--codex')
         if name == 'vision-read':
             c.add_argument('--image', action='append', required=True); c.add_argument('--model')
+            c.add_argument('--notes',default='')
     return p
 
 def run(args):
@@ -156,7 +157,7 @@ def run(args):
             return prepare_session(store, args.id, args.purpose, args.run, args.paid, args.connection)
         from .vision import codex_status, recognize
         if command == 'vision-status': return codex_status(args.codex)
-        if command == 'vision-read': return recognize(args.image, store, args.codex, args.model)
+        if command == 'vision-read': return recognize(args.image, store, args.codex, args.model,args.notes)
     if command=='schema':
         return dict(version=__version__, states=STATES, adapter='mia-bole-v1',
                     commands=['init','validate','doctor','start','status','events','wait','stop','replay','audit','export',

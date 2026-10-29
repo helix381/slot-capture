@@ -2,9 +2,9 @@
 
 Windows本地采集器，提供图形界面与命令行。把已验证的采集操作和条件判断放在本地执行，模型只需要读取状态摘要和新事件。
 
-项目版本暂保留0.2.3。**日常修复和小功能用Git提交记录，不增加版本号或版本目录。** 默认构建固定输出 `dist/slot-capture.exe` 与 `dist/slot-capture-gui.exe`；正式发布时再统一更新版本和tag。完整操作流程见 [机台录入与首转流程](docs/onboarding-v0.2.md)，开发与数据排除约定见 [贡献说明](CONTRIBUTING.md)。
+当前版本 **v0.3.0**。**日常修复和小功能用Git提交记录，不增加版本号或版本目录。** 默认构建固定输出 `dist/slot-capture.exe` 与 `dist/slot-capture-gui.exe`。新版界面见 [v0.3.0说明](docs/desktop-v0.3.md)，采集流程见 [机台录入与首转流程](docs/onboarding-v0.2.md)，开发约定见 [贡献说明](CONTRIBUTING.md)。
 
-界面重设计的[离线交互稿](design/prototype/index.html)与[设计说明](design/DESIGN.md)供用户确认：黑白灰基底、橙红强调、轻弥散与分区卡片。该稿不会连接设备或调用模型，尚未替换正式GUI。
+v0.3.0将正式GUI改为黑白灰基底、橙红强调、轻弥散与分区卡片。左侧导航，中间连接/规则/首转/采集，右侧规则助手。HTML/CSS通过pywebview与Edge WebView2承载，继续调用原有JSON CLI；[原设计稿](design/prototype/index.html)单独保留，仅演示交互。[设计说明](design/DESIGN.md)记录了选型与视觉要求。
 
 v0.2.3：“选择规则截图”打开本地图片导入面板，支持文件拖入、Ctrl+V粘贴截图/复制的图片文件、连续追加、预览、移除和去重。最多12张、单张20MiB；图片先缓存本地，只有用户点击识图后才发送给Codex。识图默认显式指定`gpt-6-luna`与`model_reasoning_effort="low"`，不再使用不确定的CLI默认模型，不自动升级到其他模型。Luna在官方指南中定位为经济型提取模型，本地目录支持图片且最低深度为low；未取得所有模型的账户扣额对照，不宣称已证明绝对最低费用。
 
@@ -32,11 +32,11 @@ v0.2.2修复UID获取过于依赖单一字段的问题：兼容`userId`/`appId`�
 
 ## 文件与运行
 
-构建后双击 `dist/slot-capture-gui.exe` 打开图形界面。请将它与同一次构建的 `slot-capture.exe` 放在同一目录。两者运行均不依赖外部Python；连接设备时仍需要ADB及设备上的tcpdump。可选截图识别还需要已登录的Codex CLI。
+构建后双击 `dist/slot-capture-gui.exe` 打开图形界面。请将它与同一次构建的 `slot-capture.exe` 放在同一目录。两者均不依赖外部Python；图形版需要Microsoft Edge WebView2 Runtime和.NET Framework（本机已检查到WebView2 Runtime）。连接设备仍需要ADB及设备上的tcpdump。可选截图识别需要已登录的Codex CLI。
 
-界面提供新建采集计划、导入已有配置、打开批次、环境检查、开始/停止采集、实时计数、增量事件、审计和导出。绿色看板显示阶段、付费/目标、免费次数、已核算返奖、连接时效与问题数；点击事件查看完整字段。返奖数字在完整尾链审计前仍可能变化。
+界面提供建档、规则录入、截图导入与识图、自动连接、首转、正式采集、打开历史批次与导出。看板显示付费/目标、免费次数、Bet、暂计/最终返奖和问题数；事件悬停可查看完整字段。首转不进入正式批次数字；返奖在完整尾链审计前仍可能变化。没有数据时显示空状态。
 
-新建计划不会自动开始抓包。关闭GUI不停止后台任务，重新打开同一运行目录可继续查看；停止采集按钮只控制抓包，不停止游戏。`slot-capture-gui.exe --run DIR` 可直接打开指定批次，不会启动采集。已有CLI调用方式保持一致。
+启动GUI不会自动检测设备、抓包或调用模型。点击“自动检测并连接”“开始首转监听”“开始采集”才启动相应监听。关闭GUI不停止后台任务，重新打开会恢复最近批次；停止监听只控制抓包，不停止游戏。`slot-capture-gui.exe --run DIR` 可直接查看指定批次。已有CLI调用方式保持一致。
 
 ```powershell
 $capture = 'E:\AI\tools\slot-capture\dist\slot-capture.exe'

@@ -1,4 +1,4 @@
-from slotcapture.gui_workflow import main
+from slotcapture.desktop import main
 
 if __name__ == '__main__':
     main()
