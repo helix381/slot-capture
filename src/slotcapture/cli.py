@@ -120,10 +120,11 @@ def parser():
     c = sub.add_parser('discover', help='Discover ADB, online devices, foreground app and passive heartbeat candidates')
     c.add_argument('--store'); c.add_argument('--adb'); c.add_argument('--device'); c.add_argument('--package')
     c.add_argument('--no-probe',action='store_true',help='List sockets without passive heartbeat probes')
-    for name in ['machine-list', 'machine-save', 'machine-show', 'session-prepare', 'vision-status', 'vision-read']:
+    for name in ['machine-list', 'machine-save', 'machine-show', 'machine-delete', 'machine-restore', 'session-prepare', 'vision-status', 'vision-read']:
         c = sub.add_parser(name)
         c.add_argument('--store')
-        if name in ('machine-show', 'session-prepare'): c.add_argument('--id', required=True)
+        if name in ('machine-show', 'machine-delete', 'machine-restore', 'session-prepare'): c.add_argument('--id', required=True)
+        if name=='machine-restore':c.add_argument('--deleted',required=True)
         if name == 'machine-save': c.add_argument('--input', required=True)
         if name == 'session-prepare':
             c.add_argument('--purpose', choices=['connection', 'first_spin', 'sampling'], required=True)
@@ -141,7 +142,7 @@ def run(args):
         from .workflow import default_store
         return discover(args.store or default_store(), args.adb, args.device, args.package, not args.no_probe)
     if command.startswith(('machine-', 'session-')) or command in ('vision-status', 'vision-read'):
-        from .workflow import default_store, list_profiles, save_profile, load_profile, verified, prepare_session
+        from .workflow import default_store, list_profiles, save_profile, load_profile, verified, prepare_session, delete_profile, restore_profile
         store = args.store or default_store()
         if command == 'machine-list':
             return dict(store=str(store), machines=[dict(p, first_spin_verified=verified(p)) for p in list_profiles(store)])
@@ -149,6 +150,8 @@ def run(args):
             p = load_profile(store, args.id)
             return dict(p, first_spin_verified=verified(p))
         if command == 'machine-save': return save_profile(store, read(args.input))
+        if command == 'machine-delete': return delete_profile(store,args.id)
+        if command == 'machine-restore': return restore_profile(store,args.id,args.deleted)
         if command == 'session-prepare':
             return prepare_session(store, args.id, args.purpose, args.run, args.paid, args.connection)
         from .vision import codex_status, recognize
@@ -157,7 +160,8 @@ def run(args):
     if command=='schema':
         return dict(version=__version__, states=STATES, adapter='mia-bole-v1',
                     commands=['init','validate','doctor','start','status','events','wait','stop','replay','audit','export',
-                              'machine-list','machine-show','machine-save','session-prepare','vision-status','vision-read','discover'],
+                              'machine-list','machine-show','machine-save','machine-delete','machine-restore',
+                              'session-prepare','vision-status','vision-read','discover'],
                     exit_codes={'0':'command succeeded (inspect state/health)', '2':'invalid input', '3':'audit/replay incomplete', '4':'runtime failure'},
                     events='events --after CURSOR returns only new durable events; stdout is one JSON envelope per command',
                     stop='normal stop drains rewards, force marks capture incomplete; neither stops the game',

@@ -31,6 +31,7 @@ class WorkflowApp:
         self.detecting = False
         self.last_diagnostic = None
         self.detected_android_user = None
+        self.last_deleted = None
         root.title('Slot Capture · 机台采集工作台')
         root.geometry('1180x820')
         root.minsize(1000, 740)
@@ -62,6 +63,9 @@ class WorkflowApp:
         self.machines.bind('<<ListboxSelect>>', self.choose_machine)
         ttk.Button(library, text='＋ 新建机台', command=self.new_machine).pack(fill='x', pady=(10, 5))
         ttk.Button(library, text='刷新档案', command=self.refresh_library).pack(fill='x')
+        ttk.Button(library, text='删除选中档案', command=self.delete_machine).pack(fill='x',pady=(6,0))
+        self.undo_delete_button=ttk.Button(library,text='撤销删除',command=self.undo_delete,state='disabled')
+        self.undo_delete_button.pack(fill='x',pady=(6,0))
         self.tabs = ttk.Notebook(body)
         self.tabs.pack(side='left', fill='both', expand=True)
         self.pages = {}
@@ -178,9 +182,47 @@ class WorkflowApp:
 
     def new_machine(self):
         if self.active or self.busy: return
+        self.machines.selection_clear(0,'end')
         self.load_profile(dict(id=uuid.uuid4().hex[:16], name='', adapter='mia-bole-v1', capture={},
                                symbols=[], features=[], notes='', screenshots=[], rules_confirmed=False))
         self.tabs.select(self.pages['home'])
+
+    def delete_machine(self):
+        if self.busy or self.active:
+            self.notice.set('请先等待当前检测或采集任务结束，再删除档案。');return
+        selected=self.machines.curselection()
+        if not selected:
+            self.notice.set('请先在左侧选中要删除的机台档案。');return
+        profile=list(self.records.values())[selected[0]]
+        if not messagebox.askyesno('删除机台档案',f"删除「{profile['name']}」？\n档案可撤销恢复，历史采集数据与规则截图保留。",parent=self.root):return
+        identity=profile['id']
+        self.task(lambda:self.cli('machine-delete','--id',identity),self.machine_deleted,'正在删除档案…')
+
+    def machine_deleted(self,result):
+        self.last_deleted=result
+        self.records.pop(result['id'],None)
+        self.render_library()
+        if self.profile and self.profile['id']==result['id']:self.new_machine()
+        self.undo_delete_button.configure(state='normal')
+        self.notice.set(f"已删除「{result['name']}」；历史数据保留，可点击“撤销删除”恢复。")
+
+    def undo_delete(self):
+        if self.busy or self.active:
+            self.notice.set('请先等待当前检测或采集任务结束。');return
+        if not self.last_deleted:return
+        deleted=self.last_deleted
+        self.task(lambda:self.cli('machine-restore','--id',deleted['id'],'--deleted',deleted['deleted']),
+                  self.machine_restored,'正在恢复档案…')
+
+    def machine_restored(self,profile):
+        self.records[profile['id']]=profile
+        self.render_library()
+        self.load_profile(profile)
+        index=list(self.records).index(profile['id'])
+        self.machines.selection_set(index)
+        self.last_deleted=None
+        self.undo_delete_button.configure(state='disabled')
+        self.notice.set(f"已恢复「{profile['name']}」。")
 
     def load_profile(self, p):
         self.profile = p

@@ -19,9 +19,12 @@ def default_store():
         if shared.exists():
             return shared
         # Reuse an existing library in place; do not silently copy large raw captures.
-        for old in sorted(distribution.glob('v*/data'), reverse=True):
+        legacy=sorted(distribution.glob('v*/data'), reverse=True)
+        for old in legacy:
             if next((old/'machines').glob('*.json'), None) is not None:
                 return old
+        for old in legacy:
+            if (old/'trash'/'machines').is_dir():return old
         return shared
     return base / 'data'
 
@@ -81,6 +84,43 @@ def list_profiles(store):
     return [read(path) for path in sorted(directory.glob('*.json'))] if directory.exists() else []
 
 
+def delete_profile(store, identity):
+    """Move only the profile to recoverable storage; leave all run evidence intact."""
+    source=profile_path(store,identity)
+    profile=read(source)
+    from .runtime import status
+    runs=list((Path(store)/'runs'/identity).glob('*/plan.json'))
+    index=Path(store)/'machine-runs'/(identity+'.json')
+    if index.exists():
+        runs += [Path(run)/'plan.json' for run in read(index)['runs']]
+    if profile.get('verification',{}).get('run'):
+        runs.append(Path(profile['verification']['run'])/'plan.json')
+    for plan_path in runs:
+        run=plan_path.parent
+        if not (run/'status.json').exists():continue
+        state=status(run)
+        if state.get('worker_alive') or state['state']=='STARTING':
+            raise ValueError('该机台仍有采集任务，请先等待任务结束再删除档案')
+    token=uuid.uuid4().hex
+    destination=Path(store)/'trash'/'machines'/identity/(token+'.json')
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    source.rename(destination)
+    return dict(id=identity,name=profile['name'],deleted=token,archived_path=str(destination.resolve()),
+                history_preserved=True)
+
+
+def restore_profile(store, identity, deleted):
+    destination=profile_path(store,identity)
+    if not re.fullmatch(r'[a-f0-9]{32}',deleted):raise ValueError('Invalid deletion token')
+    source=Path(store)/'trash'/'machines'/identity/(deleted+'.json')
+    if destination.exists():raise FileExistsError('同ID档案已存在，不会覆盖；请先检查当前档案')
+    profile=read(source)
+    if profile.get('id')!=identity:raise ValueError('回收档案ID不一致')
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    source.rename(destination)
+    return dict(profile,first_spin_verified=verified(profile))
+
+
 def verified(profile):
     v = profile.get('verification') or {}
     if v.get('revision') != revision(profile):
@@ -132,6 +172,11 @@ def prepare_session(store, identity, purpose, run, target=1, connection=None):
     root = init_run(run, plan)
     # Snapshot the human-approved labels so later edits never rewrite old results.
     write(root/'machine.json', p)
+    index=Path(store)/'machine-runs'/(identity+'.json')
+    index.parent.mkdir(parents=True,exist_ok=True)
+    runs=read(index)['runs'] if index.exists() else []
+    if str(root) not in runs:runs.append(str(root))
+    write(index,dict(runs=runs))
     return dict(run=str(root), purpose=purpose, state='PREPARED', bet=None)
 
 
