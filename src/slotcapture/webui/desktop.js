@@ -1,7 +1,8 @@
 'use strict';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const state={machines:[],profile:null,images:[],ready:false,active:false,busy:false,dirty:false,
-  run:null,purpose:null,cursor:0,events:[],status:null,polling:false,terminal:null,deleted:false};
+  run:null,purpose:null,cursor:0,events:[],status:null,polling:false,terminal:null,deleted:false,
+  pages:{library:0,symbols:0,features:0,events:0}};
 const terminal=new Set(['COMPLETE','STOPPED_EARLY','STOPPED_INCOMPLETE','FAILED']);
 const labels={PREPARED:'计划已建立',STARTING:'正在连接',CHECKING_CONNECTION:'核验游戏心跳',
   WAITING_FOR_SPIN:'等待你在游戏内旋转',CAPTURING:'正在记录结果',DRAINING:'请停止新增付费，等待奖励链收尾',
@@ -17,11 +18,14 @@ function changeView(name){
   $$('.nav-item').forEach(v=>{v.classList.toggle('active',v.dataset.view===name);v.toggleAttribute('aria-current',v.dataset.view===name);if(v.dataset.view===name)v.setAttribute('aria-current','page');});
   $$('[data-step]').forEach(v=>v.classList.toggle('current',v.dataset.step===name));
   ['breadcrumb-page','page-title','page-subtitle'].forEach((id,i)=>$('#'+id).textContent=views[name][i]);
+  $('.content-layout').classList.toggle('rules-mode',name==='rules');
+  $('.ai-panel').hidden=name!=='rules';
+  renderRules();renderEvents();
   location.hash=name;
 }
 let toastTimer;
 function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
-function message(text,kind=''){const el=$('#work-status');el.textContent=text;el.className=kind;el.hidden=!text;}
+function message(text,kind=''){const el=$('#work-status');el.textContent=text;el.title=text;el.className=kind;el.hidden=!text;}
 function node(tag,text,cls){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
 async function api(method,...args){
   if(!window.pywebview?.api?.[method])throw Error('桌面接口尚未就绪，请稍候；独立浏览器页面无法执行采集。');
@@ -67,15 +71,30 @@ async function task(text,fn){
   finally{state.busy=false;gates();}
 }
 function upsert(p){const i=state.machines.findIndex(x=>x.id===p.id);if(i<0)state.machines.push(p);else state.machines[i]=p;renderLibrary();}
+function pageSlice(key,items,size,container,render){
+  const pages=Math.max(1,Math.ceil(items.length/size));
+  state.pages[key]=Math.max(0,Math.min(state.pages[key],pages-1));
+  const start=state.pages[key]*size;const root=$(container);root.replaceChildren();
+  if(pages>1){
+    const prev=node('button','‹'),next=node('button','›');
+    prev.setAttribute('aria-label','上一页');next.setAttribute('aria-label','下一页');
+    prev.disabled=state.pages[key]===0;next.disabled=state.pages[key]===pages-1;
+    prev.onclick=()=>{state.pages[key]--;render();};next.onclick=()=>{state.pages[key]++;render();};
+    root.append(prev,node('span',`${state.pages[key]+1} / ${pages}`),next);
+  }else if(key==='symbols')root.append(node('span',`共 ${items.length} 项`));
+  return items.slice(start,start+size).map((item,i)=>[i+start,item]);
+}
 function renderLibrary(){
   $('#machine-library').replaceChildren();$('#machine').replaceChildren();
-  for(const p of state.machines){
+  const capacity=Math.max(1,Math.floor(($('#machine-library').clientHeight-24)/72));
+  const visible=pageSlice('library',state.machines,capacity,'#library-pager',renderLibrary);
+  for(const [,p] of visible){
     const b=node('button',undefined,'machine-item'+(p.id===state.profile?.id?' selected':''));b.dataset.id=p.id;
     b.append(node('span',(p.name||'S').slice(0,1),'machine-square'));
     const title=node('span',p.name);title.append(node('small',p.first_spin_verified?'首转已通过':'待首转核验'));b.append(title);
     b.onclick=()=>chooseMachine(p.id);$('#machine-library').append(b);
-    const option=node('option',p.name);option.value=p.id;$('#machine').append(option);
   }
+  for(const p of state.machines){const option=node('option',p.name);option.value=p.id;$('#machine').append(option);}
   const option=node('option','新建机台档案…');option.value='';$('#machine').append(option);
   $('#machine').value=state.machines.some(p=>p.id===state.profile?.id)?state.profile.id:'';
   if(!state.machines.length)$('#machine-library').append(node('p','还没有档案，先新建一个。','library-empty'));
@@ -84,6 +103,7 @@ function renderLibrary(){
 }
 async function loadProfile(p){
   state.profile=structuredClone(p||blank());state.dirty=false;state.images=[];
+  state.pages.symbols=0;state.pages.features=0;
   $('#profile-name').value=state.profile.name;$('#profile-adapter').value=state.profile.adapter;
   $('#profile-notes').value=state.profile.notes||'';$('#rules-confirmed').checked=!!state.profile.rules_confirmed;
   for(const key of ['adb','device','package','game_ip'])$('#cap-'+key).value=state.profile.capture?.[key]||'';
@@ -92,14 +112,17 @@ async function loadProfile(p){
   $('#verify-caption').textContent=state.profile.first_spin_verified?'此规则版本已通过完整首转核验':'等待开启监听';gates();
 }
 function renderRules(){
+  if(!state.profile)return;
   const symbols=state.profile.symbols||[];$('#symbol-count').textContent=symbols.length;$('#symbol-rows').replaceChildren();
-  for(const [i,s] of symbols.entries()){
-    const tr=node('tr');for(const value of [s.name,s.role||'待确认',s.size||'待确认',s.protocol_id??'待核对'])tr.append(node('td',value));
+  const capacity=Math.max(1,Math.min(12,Math.floor(($('#view-rules .table-scroll').clientHeight-30)/32)));
+  for(const [i,s] of pageSlice('symbols',symbols,capacity,'#symbol-pager',renderRules)){
+    const tr=node('tr');for(const value of [s.name,s.role||'待确认',s.size||'待确认',s.protocol_id??'待核对']){const td=node('td',value);td.title=String(value);tr.append(td);}
     const td=node('td'),b=node('button','编辑','table-action');b.onclick=()=>editRow('symbols',i);td.append(b);tr.append(td);$('#symbol-rows').append(tr);
   }
   if(!symbols.length){const tr=node('tr'),td=node('td','暂无 Symbol。可以手动新增，也可以导入截图识别。','empty-row');td.colSpan=5;tr.append(td);$('#symbol-rows').append(tr);}
   $('#feature-list').replaceChildren();
-  for(const [i,f] of (state.profile.features||[]).entries()){const b=node('button',f.name);b.title=f.notes||'点击编辑';b.onclick=()=>editRow('features',i);$('#feature-list').append(b);}
+  $('#feature-count').textContent=state.profile.features?.length||0;
+  for(const [i,f] of pageSlice('features',state.profile.features||[],3,'#feature-pager',renderRules)){const b=node('button',f.name);b.title=f.name+'\n'+(f.notes||'点击编辑');b.onclick=()=>editRow('features',i);$('#feature-list').append(b);}
   if(!state.profile.features?.length)$('#feature-list').append(node('p','尚未录入特色玩法','muted'));
   gates();
 }
@@ -151,11 +174,13 @@ function renderConnection(){
   $('#connection-badge').replaceChildren(node('span'),document.createTextNode(state.ready?'心跳已核验':'尚未就绪'));
   const cap=state.profile?.capture||{};
   $('#device-state').textContent=cap.device||'等待检测';$('#game-state').textContent=cap.package||'等待识别';
+  $('#device-state').title=cap.device||'';$('#game-state').title=cap.package||'';
   $('#heartbeat-state').textContent=state.ready?'双向匹配':state.active&&state.purpose==='connection'?'核验中':'尚未验证';
 }
 async function connectWith(cap){
   const p=draft();p.name=p.name||'未命名机台';const result=await api('connect',p,cap);
   state.ready=false;await loadProfile(result.profile);beginRun(result);message('正在被动核验游戏心跳，请保持机台打开。');renderConnection();
+  if($('#connection-dialog').open)$('#connection-dialog').close();
 }
 async function detect(device=null,adb=null){
   await task('正在检测设备、前台游戏和游戏心跳，请保持机台打开…',async()=>{
@@ -192,11 +217,22 @@ function renderMetrics(){
 function renderEvents(){
   const root=$('#events');root.replaceChildren();
   if(!state.events.length){root.append(node('div',state.run?`${purposes[state.purpose]||'历史批次'} · 等待新事件`:'尚未开始采集','event-empty'));return;}
-  for(const event of state.events.slice(-60).reverse()){
+  const capacity=Math.max(0,Math.floor(root.clientHeight/30));
+  for(const event of capacity?state.events.slice(-capacity).reverse():[]){
     const row=node('div',undefined,'event-row'+(['critical','error','action_required'].includes(event.severity)?' important':''));
     const time=node('time',new Date(event.time_utc).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}));time.dateTime=event.time_utc;
     const detail=node('p',event.display||event.kind);row.title=JSON.stringify(event.detail,null,2);row.append(time,detail);root.append(row);
   }
+  if($('#events-dialog').open)renderFullEvents();
+}
+function renderFullEvents(){
+  const root=$('#full-events');root.replaceChildren();
+  const capacity=innerHeight<720?3:5;
+  for(const [,event] of pageSlice('events',[...state.events].reverse(),capacity,'#events-pager',renderFullEvents)){
+    const row=node('div',undefined,'event-row');
+    row.append(node('time',new Date(event.time_utc).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})),node('p',event.display||event.kind));root.append(row);
+  }
+  if(!state.events.length)root.append(node('p','暂无事件','import-hint'));
 }
 async function poll(){
   if(state.polling||state.busy||!window.pywebview?.api)return;
@@ -294,12 +330,38 @@ $('#rules-confirmed').onchange=()=>modified(false);
 for(const key of ['adb','device','package','game_ip'])$('#cap-'+key).oninput=()=>{state.ready=false;state.dirty=true;renderConnection();gates();};
 $('#spin-count').oninput=renderMetrics;
 $('#add-symbol').onclick=()=>editRow('symbols');$('#add-feature').onclick=()=>editRow('features');
+$('#connection-options').onclick=()=>$('#connection-dialog').showModal();
+$('#edit-notes').onclick=()=>$('#notes-dialog').showModal();
+$('#show-events').onclick=()=>{state.pages.events=0;renderFullEvents();$('#events-dialog').showModal();};
+function showStatus(){if(!$('#work-status').textContent)return;$('#text-title').textContent='状态详情';$('#text-body').textContent=$('#work-status').textContent;$('#text-dialog').showModal();}
+$('#work-status').onclick=showStatus;$('#work-status').tabIndex=0;$('#work-status').setAttribute('role','button');
+$('#work-status').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showStatus();}};
+async function windowCommand(action){
+  try{const result=await api('window_command',action);document.body.classList.toggle('window-maximized',result.maximized);}
+  catch(e){toast(e.message);}
+}
+for(const action of ['minimize','maximize','close'])$('#window-'+action).onclick=()=>windowCommand(action);
+$('.window-drag').ondblclick=()=>windowCommand('maximize');
+// Only this dedicated surface moves the window; buttons and forms are never drag regions.
+const grip=$('#window-resize');let resizeOrigin=null,resizeBusy=false,resizeTarget=null;
+async function resizeWindow(){
+  if(resizeBusy||!resizeTarget)return;
+  resizeBusy=true;const target=resizeTarget;resizeTarget=null;
+  try{await api('resize_window',...target);}catch(e){toast(e.message);}
+  finally{resizeBusy=false;if(resizeTarget)resizeWindow();}
+}
+grip.onpointerdown=e=>{if(e.button!==0)return;resizeOrigin={x:e.screenX,y:e.screenY,w:innerWidth,h:innerHeight};grip.setPointerCapture(e.pointerId);e.preventDefault();};
+grip.onpointermove=e=>{if(!resizeOrigin)return;resizeTarget=[resizeOrigin.w+e.screenX-resizeOrigin.x,resizeOrigin.h+e.screenY-resizeOrigin.y];resizeWindow();};
+grip.onpointerup=grip.onpointercancel=()=>{resizeOrigin=null;};
+let layoutFrame;
+window.addEventListener('resize',()=>{cancelAnimationFrame(layoutFrame);layoutFrame=requestAnimationFrame(()=>{renderLibrary();renderRules();renderEvents();});});
 $$('[data-view]').forEach(b=>b.onclick=()=>changeView(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>changeView(b.dataset.go));
 let booted=false;
 async function bootstrap(){
   if(booted)return;booted=true;
   await task('读取本地工作空间…',async()=>{const d=await api('bootstrap');state.machines=d.machines;state.ready=d.connection_ready;state.run=d.run;$('#app-version').textContent='v'+d.version;await loadProfile(d.selected);renderConnection();message('先在模拟器中打开准备采集的机台，再检测连接。');});
   if(location.hash)changeView(location.hash.slice(1));
+  else changeView('connect');
   await poll();setInterval(poll,2000);
 }
 window.addEventListener('pywebviewready',bootstrap);

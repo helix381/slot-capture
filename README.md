@@ -4,7 +4,7 @@ Windows本地采集器，提供图形界面与命令行。把已验证的采集�
 
 当前版本 **v0.3.0**。**日常修复和小功能用Git提交记录，不增加版本号或版本目录。** 默认构建固定输出 `dist/slot-capture.exe` 与 `dist/slot-capture-gui.exe`。新版界面见 [v0.3.0说明](docs/desktop-v0.3.md)，采集流程见 [机台录入与首转流程](docs/onboarding-v0.2.md)，开发约定见 [贡献说明](CONTRIBUTING.md)。
 
-v0.3.0将正式GUI改为黑白灰基底、橙红强调、轻弥散与分区卡片。左侧导航，中间连接/规则/首转/采集，右侧规则助手。HTML/CSS通过pywebview与Edge WebView2承载，继续调用原有JSON CLI；[原设计稿](design/prototype/index.html)单独保留，仅演示交互。[设计说明](design/DESIGN.md)记录了选型与视觉要求。
+v0.3.0将正式GUI改为黑白灰基底、橙红强调、轻弥散与分区卡片。四个步骤位于顶部，左侧固定为机台档案，规则助手只在确认规则时展示。主页面单屏展示，长列表分页，右上角内嵌窗口控制。HTML/CSS通过pywebview与Edge WebView2承载，继续调用原有JSON CLI；[原设计稿](design/prototype/index.html)单独保留，仅演示交互。[设计说明](design/DESIGN.md)记录了选型与视觉要求。
 
 v0.2.3：“选择规则截图”打开本地图片导入面板，支持文件拖入、Ctrl+V粘贴截图/复制的图片文件、连续追加、预览、移除和去重。最多12张、单张20MiB；图片先缓存本地，只有用户点击识图后才发送给Codex。识图默认显式指定`gpt-6-luna`与`model_reasoning_effort="low"`，不再使用不确定的CLI默认模型，不自动升级到其他模型。Luna在官方指南中定位为经济型提取模型，本地目录支持图片且最低深度为low；未取得所有模型的账户扣额对照，不宣称已证明绝对最低费用。
 

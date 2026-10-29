@@ -4,7 +4,7 @@ import io
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from PIL import Image
 from slotcapture.desktop import DesktopAPI
 from slotcapture.cli import parser, run
@@ -105,6 +105,23 @@ class DesktopTests(unittest.TestCase):
     def test_session_rejects_invalid_targets_and_unknown_purposes(self):
         for n in (0,-1,True,1.5,1000001):self.assertFalse(self.api.start_session(self.profile,'sampling',n)['ok'])
         self.assertFalse(self.api.start_session(self.profile,'other',1)['ok'])
+
+    def test_window_buttons_only_control_the_window_and_preserve_capture(self):
+        window=Mock();self.api._window=window
+        self.data(self.api.window_command('minimize'));window.minimize.assert_called_once()
+        self.assertTrue(self.data(self.api.window_command('maximize'))['maximized'])
+        self.assertFalse(self.data(self.api.window_command('maximize'))['maximized'])
+        window.maximize.assert_called_once();window.restore.assert_called_once()
+        self.data(self.api.window_command('close'));window.destroy.assert_called_once()
+        self.assertEqual(self.calls,[])  # No CLI stop, kill, device or file actions.
+        self.assertFalse(self.api.window_command('arbitrary')['ok'])
+
+    def test_window_resize_has_minimum_bounds_and_never_resizes_maximized(self):
+        window=Mock();self.api._window=window
+        self.data(self.api.resize_window(400,300));window.resize.assert_called_once_with(960,640)
+        window.resize.reset_mock();self.api._on_maximized()
+        self.data(self.api.resize_window(1200,800));window.resize.assert_not_called()
+        self.assertFalse(self.api.resize_window('1200',800)['ok'])
 
 
 if __name__=='__main__':unittest.main()

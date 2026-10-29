@@ -38,7 +38,9 @@ window.pywebview={api:{
  paste_images:wrap(()=>{call('paste_images',[]);return {paths:Object.keys(m.images).slice(0,1)}}),
  open_local:wrap(kind=>{call('open_local',[kind]);return {opened:true}}),
  open_history:wrap(()=>{call('open_history',[]);return {cancelled:true}}),
- export:wrap(()=>{call('export',[]);return {output:'X:/mock/export'}})
+ export:wrap(()=>{call('export',[]);return {output:'X:/mock/export'}}),
+ window_command:wrap(action=>{call('window_command',[action]);if(action==='maximize')m.maximized=!m.maximized;return {maximized:!!m.maximized}}),
+ resize_window:wrap((w,h)=>{call('resize_window',[w,h]);return {}})
 }};
 m.finish=()=>{m.status.state='COMPLETE';m.status.worker_alive=false;m.status.live=false;m.status.checked_utc=new Date().toISOString();
  if(m.purpose==='connection')m.ready=true;
@@ -131,14 +133,47 @@ def main():
             page.locator('#undo-delete').click();page.wait_for_function('!state.busy');assert page.locator('.archive-delete').count()==1
             page.locator('#archive-dialog .icon-button').click()
             checks.append('profiles: confirmed delete, cancellation and undo')
-            # Verify all views at the minimum desktop size and common wider sizes.
-            for width in [960,1200,1440]:
-                page.set_viewport_size(dict(width=width,height=780))
+            # Fixed chrome, single-screen pages and paginated long data.
+            for action in ['minimize','maximize','maximize','close']:
+                page.locator('#window-'+action).click()
+            page.wait_for_function('__mock.calls.filter(c=>c.name==="window_command").length===4')
+            assert not page.evaluate('__mock.calls.some(c=>c.name==="stop")')
+            checks.append('window controls: explicit minimize/maximize/restore/close bridge; close never stops capture')
+            page.evaluate('''__mock.run=null;state.run=null;state.status=null;
+                state.machines=Array.from({length:25},(_,i)=>({...state.profile,id:'test-'+i,name:'离屏长档案测试 '+i}));
+                state.profile.symbols=Array.from({length:40},(_,i)=>({name:'Symbol '+i,role:'普通',size:'1x1'}));
+                state.profile.features=Array.from({length:15},(_,i)=>({name:'玩法 '+i}));
+                state.events=Array.from({length:80},(_,i)=>({event_id:String(i),time_utc:new Date().toISOString(),kind:'state_changed',display:'第 '+i+' 条离屏测试事件',severity:'info'}));
+                renderLibrary();renderRules();renderEvents();''')
+            for width,height in [(960,640),(1200,720),(1280,800),(1440,900)]:
+                page.set_viewport_size(dict(width=width,height=height))
                 for view in ['connect','rules','verify','capture']:
                     page.locator(f'[data-view={view}]').click()
                     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),(width,view)
+                    assert page.locator('.ai-panel').is_visible()==(view=='rules')
+                    layout=page.evaluate('''() => {
+                        const nodes=[document.querySelector('.sidebar'),document.querySelector('.workspace'),document.querySelector('.view.active')];
+                        if(document.querySelector('#view-rules').classList.contains('active'))nodes.push(document.querySelector('.table-scroll'),document.querySelector('.ai-panel'));
+                        return nodes.filter(el=>el.scrollHeight>el.clientHeight+2||el.scrollWidth>el.clientWidth+2).map(el=>({id:el.id,cls:el.className,h:el.clientHeight,sh:el.scrollHeight,w:el.clientWidth,sw:el.scrollWidth}));
+                    }''')
+                    assert not layout,(width,height,view,layout)
+                    for control in page.locator('.view.active button:visible,.ai-panel button:visible,.window-controls button').all():
+                        box=control.bounding_box();assert box and box['y']>=0 and box['y']+box['height']<=height+1,(width,height,view,control.inner_text(),box)
+                    before=page.locator('.sidebar').bounding_box();page.mouse.wheel(0,700)
+                    assert page.locator('.sidebar').bounding_box()==before
+                    assert page.evaluate('scrollY')==0
+                assert page.locator('#library-pager button').count()==2
+                page.locator('[data-view=rules]').click()
+                page.evaluate('state.pages.symbols=0;renderRules()')
+                first=page.locator('#symbol-rows tr').first.inner_text();page.locator('#symbol-pager button').last.click()
+                assert page.locator('#symbol-rows tr').first.inner_text()!=first
+                if width in (960,1280):
+                    for view in ['connect','rules','verify','capture']:
+                        page.locator(f'[data-view={view}]').click()
+                        page.locator('#toast').evaluate('(el)=>el.hidden=true')
+                        page.screenshot(path=str(output/f'fixed-{view}-{width}.png'),animations='disabled')
             page.emulate_media(reduced_motion='reduce')
-            checks.append('layout: all pages fit 960/1200/1440 widths, reduced-motion supported')
+            checks.append('layout: no clipped controls/scrolling at 960x640,1200x720,1280x800,1440x900; fixed sidebar, contextual assistant, long lists paginate')
             assert not errors,errors
             checks.append('JavaScript: zero uncaught errors')
             (output/'desktop-validation.json').write_text(json.dumps(dict(checks=checks,errors=errors,mode='headless / fake API only'),ensure_ascii=False,indent=2),encoding='utf-8')

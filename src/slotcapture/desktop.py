@@ -29,6 +29,7 @@ class DesktopAPI:
         self._store.mkdir(parents=True,exist_ok=True)
         self._invoke=command or invoke
         self._window=None
+        self._maximized=False
         self._last_deleted=None
         path=self._store/'desktop-session.json'
         self._session=read(path) if path.exists() else {}
@@ -238,6 +239,34 @@ class DesktopAPI:
         if not path:raise ValueError('尚无对应的本地记录')
         os.startfile(path);return dict(opened=True)
 
+    def window_command(self,action):
+        """User-operated chrome, independent of a slow discovery/model operation."""
+        try:
+            if not self._window:raise ValueError('尚未连接桌面窗口')
+            if action=='minimize':self._window.minimize()
+            elif action=='maximize':
+                desired=not self._maximized
+                if desired:self._window.maximize()
+                else:self._window.restore()
+                self._maximized=desired
+            elif action=='close':self._window.destroy()
+            else:raise ValueError('未知窗口操作')
+            return dict(ok=True,data=dict(maximized=self._maximized))
+        except Exception as exc:return dict(ok=False,error=dict(message=str(exc)))
+
+    def resize_window(self,width,height):
+        try:
+            if not self._window:raise ValueError('尚未连接桌面窗口')
+            if any(isinstance(n,bool) or not isinstance(n,(int,float)) for n in (width,height)):
+                raise ValueError('窗口尺寸无效')
+            if not self._maximized:
+                self._window.resize(max(960,min(7680,int(width))),max(640,min(4320,int(height))))
+            return dict(ok=True,data={})
+        except Exception as exc:return dict(ok=False,error=dict(message=str(exc)))
+
+    def _on_maximized(self):self._maximized=True
+    def _on_restored(self):self._maximized=False
+
 
 def main():
     import argparse
@@ -252,5 +281,8 @@ def main():
         api._run=str(root);api._persist()
     page=Path(__file__).parent/'webui'/'index.html'
     api._window=webview.create_window('Slot Capture · v'+__version__,url=str(page),js_api=api,
-                                      width=1200,height=780,min_size=(960,640),background_color='#EAEAE7',text_select=True)
+                                      width=1280,height=800,min_size=(960,640),background_color='#EAEAE7',
+                                      text_select=True,frameless=True,easy_drag=False)
+    api._window.events.maximized+=api._on_maximized
+    api._window.events.restored+=api._on_restored
     webview.start(gui='edgechromium',debug=False,private_mode=True)
