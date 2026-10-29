@@ -1,0 +1,20 @@
+{
+  "schema_version": "slotcapture/v1",
+  "run_id": "mia-example-not-started",
+  "adapter": "mia-bole-v1",
+  "bet": 13500000,
+  "target_paid": 100,
+  "max_wager": 1350000000,
+  "capture": {
+    "adb": "D:/leidian/LDPlayer14/adb.exe",
+    "device": "emulator-5554",
+    "game_ip": null,
+    "package": null,
+    "tcpdump": "tcpdump",
+    "seconds": 3600,
+    "tail_seconds": 120,
+    "quiet_seconds": 5,
+    "poll_seconds": 2,
+    "max_raw_bytes": 268435456
+  }
+}
