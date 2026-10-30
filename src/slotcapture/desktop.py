@@ -10,7 +10,7 @@ import threading
 from . import __version__
 from .common import read, write, digest, TERMINAL
 from .gui import invoke, event_summary
-from .workflow import default_store, connection_ready
+from .workflow import default_store, connection_ready, profile_path, archive_images
 
 
 def response(method):
@@ -43,6 +43,21 @@ class DesktopAPI:
         self._session.update(run=self._run,connection=self._connection,diagnostic=self._diagnostic)
         write(self._store/'desktop-session.json',self._session)
 
+    def _draft_path(self,identity):
+        profile_path(self._store,identity)
+        return self._store/'machine-drafts'/(identity+'.json')
+
+    def _with_draft(self,profile):
+        path=self._draft_path(profile['id'])
+        return dict(read(path),_draft_pending=True,first_spin_verified=False) if path.exists() else profile
+
+    def _library(self):
+        machines={p['id']:self._with_draft(p) for p in self._cli('machine-list')['machines']}
+        for path in (self._store/'machine-drafts').glob('*.json'):
+            if path.stem not in machines:
+                p=read(path);machines[path.stem]=self._with_draft(p)
+        return list(machines.values())
+
     def _idle(self):
         if self._run and (Path(self._run)/'plan.json').exists():
             s=self._invoke(['status','--run',self._run])
@@ -51,11 +66,13 @@ class DesktopAPI:
 
     def _save(self,profile):
         profile=dict(profile)
+        profile.pop('_draft_pending',None)
         profile.setdefault('id',uuid.uuid4().hex[:16])
         path=self._store/'drafts'/(uuid.uuid4().hex+'.json')
         path.parent.mkdir(exist_ok=True);write(path,profile)
         try:result=self._cli('machine-save','--input',str(path))
         finally:path.unlink(missing_ok=True)
+        self._draft_path(result['id']).unlink(missing_ok=True)
         self._session['selected_id']=result['id'];self._persist()
         return result
 
@@ -72,7 +89,7 @@ class DesktopAPI:
 
     @response
     def bootstrap(self):
-        machines=self._cli('machine-list')['machines']
+        machines=self._library()
         selected=next((p for p in machines if p['id']==self._session.get('selected_id')),machines[0] if machines else None)
         ready=bool(selected and self._connection and connection_ready(selected,self._connection))
         if not ready:self._connection=None
@@ -83,7 +100,10 @@ class DesktopAPI:
     @response
     def select_machine(self,identity):
         self._idle()
-        result=self._cli('machine-show','--id',identity) if identity else None
+        result=None
+        if identity:
+            draft=self._draft_path(identity)
+            result=self._with_draft(read(draft)) if draft.exists() else self._cli('machine-show','--id',identity)
         self._run=None;self._connection=None;self._session['selected_id']=identity;self._persist()
         return result
 
@@ -91,6 +111,22 @@ class DesktopAPI:
     def save_machine(self,profile):
         self._idle()
         return self._save(profile)
+
+    @response
+    def save_machine_draft(self,profile):
+        """Persist incomplete onboarding without changing approved rules or verification."""
+        self._idle()
+        p=dict(profile);identity=p.get('id')
+        path=self._draft_path(identity)
+        images=p.get('screenshots',[])
+        if not isinstance(images,list) or len(images)>12:raise ValueError('最多保存12张规则截图')
+        for image in images:
+            if not Path(image).resolve().is_relative_to(self._store):raise ValueError('请先导入截图到本地')
+        p['screenshots']=archive_images(self._store,identity,images) if images else []
+        p.pop('verification',None);p.pop('first_spin_verified',None);p.pop('_draft_pending',None)
+        path.parent.mkdir(parents=True,exist_ok=True);write(path,p)
+        self._session['selected_id']=identity;self._persist()
+        return dict(p,_draft_pending=True,first_spin_verified=False)
 
     @response
     def discover(self,profile,device=None,adb=None):
@@ -146,7 +182,15 @@ class DesktopAPI:
 
     @response
     def delete_machine(self,identity):
-        self._idle();result=self._cli('machine-delete','--id',identity)
+        self._idle();draft=self._draft_path(identity)
+        if not profile_path(self._store,identity).exists() and draft.exists():
+            p=read(draft);token=uuid.uuid4().hex
+            result=dict(id=identity,name=p.get('name') or '未命名机台',deleted=token,kind='draft',history_preserved=True)
+        else:result=self._cli('machine-delete','--id',identity)
+        if draft.exists():
+            saved=self._store/'trash'/'machine-drafts'/identity/(result['deleted']+'.json')
+            saved.parent.mkdir(parents=True,exist_ok=True);draft.rename(saved)
+            result['draft_archived_path']=str(saved)
         self._last_deleted=result
         if self._session.get('selected_id')==identity:
             self._session['selected_id']=None;self._connection=None;self._run=None;self._persist()
@@ -156,7 +200,14 @@ class DesktopAPI:
     def restore_machine(self):
         self._idle()
         if not self._last_deleted:raise ValueError('本次会话没有可撤销的删除')
-        p=self._cli('machine-restore','--id',self._last_deleted['id'],'--deleted',self._last_deleted['deleted'])
+        deleted=self._last_deleted
+        draft=self._draft_path(deleted['id'])
+        if draft.exists():raise ValueError('已有同ID草稿，不能覆盖恢复')
+        if deleted.get('kind')=='draft':p=read(deleted['draft_archived_path'])
+        else:p=self._cli('machine-restore','--id',deleted['id'],'--deleted',deleted['deleted'])
+        if deleted.get('draft_archived_path'):
+            draft.parent.mkdir(parents=True,exist_ok=True);Path(deleted['draft_archived_path']).rename(draft)
+            p=self._with_draft(p)
         self._last_deleted=None;self._run=None;self._connection=None;self._session['selected_id']=p['id'];self._persist()
         return p
 

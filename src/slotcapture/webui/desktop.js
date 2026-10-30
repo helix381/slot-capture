@@ -57,7 +57,7 @@ function blank(){return {id:crypto.randomUUID().replaceAll('-','').slice(0,16),n
 function modified(invalidate=true){state.dirty=true;if(invalidate){state.profile.first_spin_verified=false;$('#rules-confirmed').checked=false;}gates();}
 function gates(){
   const locked=state.busy||state.active;
-  for(const id of ['new-machine','machine','detect','manual-connect','save-rules','verify-start','capture-start','history','undo-delete','ai-generate','add-symbol','add-feature','profile-name','profile-adapter','profile-notes','rules-confirmed','spin-count','open-import','import-main','clear-images','use-images','pick-files','paste-images'])$('#'+id).disabled=locked;
+  for(const id of ['new-machine','machine','detect','manual-connect','save-rules','rules-next','verify-start','capture-start','history','undo-delete','ai-generate','add-symbol','add-feature','profile-name','profile-adapter','profile-notes','rules-confirmed','spin-count','open-import','import-main','clear-images','use-images','pick-files','paste-images'])$('#'+id).disabled=locked;
   $$('.machine-item,.table-action,.feature-list button,.archive-delete').forEach(b=>b.disabled=locked);
   $$('[id^="cap-"]').forEach(b=>b.readOnly=locked);
   $('#undo-delete').disabled=locked||!state.deleted;
@@ -73,6 +73,12 @@ function gates(){
   $('#capture-start').disabled=locked||!state.ready||state.dirty||!p?.first_spin_verified;
   $('#verify-start').disabled=locked||!state.ready||state.dirty||!p?.rules_confirmed||!p?.symbols?.length;
   $('#verified-shortcut').hidden=!p?.first_spin_verified||state.dirty;
+  const rulesNext=$('#rules-next');
+  rulesNext.disabled=locked||!$('#rules-confirmed').checked||!p?.symbols?.length;
+  rulesNext.querySelector('span').textContent=state.dirty?'保存并下一步':!state.ready?'下一步：连接核验':p?.first_spin_verified?'下一步：正式采集':'下一步：首转核验';
+  $('#rule-save-state').textContent=state.dirty?(p?._draft_pending?'截图草稿已自动保存，规则待确认保存':'有未保存修改'):'规则档案已保存';
+  if(!p?.symbols?.length)$('#rule-save-state').textContent=p?._draft_pending?'截图草稿已自动保存，待核对规则':!state.dirty&&state.machines.some(m=>m.id===p?.id)?'档案已保存，补齐规则后继续':'可先保存截图，补齐规则后继续';
+  $('#capture-storage').textContent=state.run?'原始记录已自动保存':'采集时自动保存';
   for(const id of ['vision-settings-open','vision-settings-save','vision-refresh-models','vision-base-url','vision-api-key','vision-selection','vision-effort'])$('#'+id).disabled=locked;
   $('#vision-model').disabled=locked||$('#vision-selection').value==='automatic';
   const next=$('#connection-next');let target='rules',label='下一步：确认规则';
@@ -120,10 +126,10 @@ function renderLibrary(){
   for(const [,p] of visible){
     const b=node('button',undefined,'machine-item'+(p.id===state.profile?.id?' selected':''));b.dataset.id=p.id;
     b.append(node('span',(p.name||'S').slice(0,1),'machine-square'));
-    const title=node('span',p.name);title.append(node('small',p.first_spin_verified?'首转已通过':'待首转核验'));b.append(title);
+    const title=node('span',p.name||'未命名机台');title.append(node('small',p._draft_pending?'有未确认草稿':p.first_spin_verified?'首转已通过':'待首转核验'));b.append(title);
     b.onclick=()=>chooseMachine(p.id);$('#machine-library').append(b);
   }
-  for(const p of state.machines){const option=node('option',p.name);option.value=p.id;$('#machine').append(option);}
+  for(const p of state.machines){const option=node('option',p.name||'未命名机台');option.value=p.id;$('#machine').append(option);}
   const option=node('option','新建机台档案…');option.value='';$('#machine').append(option);
   $('#machine').value=state.machines.some(p=>p.id===state.profile?.id)?state.profile.id:'';
   if(!state.machines.length)$('#machine-library').append(node('p','还没有档案，先新建一个。','library-empty'));
@@ -131,7 +137,7 @@ function renderLibrary(){
   renderArchive();gates();
 }
 async function loadProfile(p){
-  state.profile=structuredClone(p||blank());state.dirty=false;state.images=[];
+  state.profile=structuredClone(p||blank());state.dirty=!!state.profile._draft_pending;state.images=[];
   state.pages.symbols=0;state.pages.features=0;
   $('#profile-name').value=state.profile.name;$('#profile-adapter').value=state.profile.adapter;
   $('#profile-notes').value=state.profile.notes||'';$('#rules-confirmed').checked=!!state.profile.rules_confirmed;
@@ -151,7 +157,7 @@ function renderRules(){
   if(!symbols.length){const tr=node('tr'),td=node('td','暂无 Symbol。可以手动新增，也可以导入截图识别。','empty-row');td.colSpan=5;tr.append(td);$('#symbol-rows').append(tr);}
   $('#feature-list').replaceChildren();
   $('#feature-count').textContent=state.profile.features?.length||0;
-  for(const [i,f] of pageSlice('features',state.profile.features||[],3,'#feature-pager',renderRules)){const b=node('button',f.name);b.title=f.name+'\n'+(f.notes||'点击编辑');b.onclick=()=>editRow('features',i);$('#feature-list').append(b);}
+  for(const [i,f] of pageSlice('features',state.profile.features||[],6,'#feature-pager',renderRules)){const b=node('button',f.name);b.title=f.name+'\n'+(f.notes||'点击编辑');b.onclick=()=>editRow('features',i);$('#feature-list').append(b);}
   if(!state.profile.features?.length)$('#feature-list').append(node('p','尚未录入特色玩法','muted'));
   gates();
 }
@@ -181,7 +187,7 @@ function choose(title,description,items){
   let selected=null;for(const item of items){const b=node('button',item.label,'choice-button');b.onclick=()=>{selected=item.value;d.close();};$('#choice-list').append(b);}d.showModal();
   return new Promise(resolve=>d.addEventListener('close',()=>resolve(selected),{once:true}));
 }
-async function discard(){return !state.dirty||await confirmAction('当前档案有未保存修改。放弃这些修改并继续？');}
+async function discard(){return !state.dirty||await confirmAction(state.profile?._draft_pending?'截图草稿会保留；其他未保存修改可能丢失。继续切换？':'当前档案有未保存修改。放弃这些修改并继续？');}
 async function chooseMachine(id){
   if(state.active||state.busy){renderLibrary();return;}
   if(!await discard()){renderLibrary();return;}
@@ -305,7 +311,7 @@ async function startSession(purpose){
 }
 function renderImages(){
   const grid=$('#image-grid');grid.replaceChildren();
-  for(const item of state.images){const tile=node('div',undefined,'image-tile'),image=node('img');image.src=item.preview;image.alt=item.name;const remove=node('button','×');remove.setAttribute('aria-label','移除 '+item.name);remove.onclick=()=>{if(state.busy||state.active)return;state.images=state.images.filter(i=>i.path!==item.path);state.dirty=true;renderImages();};tile.append(image,node('span',item.name),remove);grid.append(tile);}
+  for(const item of state.images){const tile=node('div',undefined,'image-tile'),image=node('img');image.src=item.preview;image.alt=item.name;const remove=node('button','×');remove.setAttribute('aria-label','移除 '+item.name);remove.onclick=()=>task('保存截图草稿…',async()=>{state.images=state.images.filter(i=>i.path!==item.path);state.dirty=true;await persistImageDraft();message('截图草稿已保存。');});tile.append(image,node('span',item.name),remove);grid.append(tile);}
   $('#attachment-summary').hidden=!state.images.length;$('#attachment-summary').textContent=`已添加 ${state.images.length} 张规则截图`;
   $('#import-hint').textContent=`已添加 ${state.images.length} / 12 张。单张不超过 20 MiB，点击识图才发送。`;gates();
 }
@@ -313,7 +319,13 @@ async function mergeImages(paths){
   const previews=await api('preview_images',paths);const combined=[...state.images];
   for(const image of previews)if(!combined.some(i=>i.path===image.path||i.sha256&&i.sha256===image.sha256))combined.push(image);
   if(combined.length>12)throw Error('最多添加 12 张截图，请先移除多余图片。');
-  state.images=combined;state.dirty=true;renderImages();
+  state.images=combined;state.dirty=true;await persistImageDraft();
+}
+async function persistImageDraft(){
+  const p=await api('save_machine_draft',draft());
+  state.profile=p;state.dirty=true;
+  state.images=p.screenshots?.length?await api('preview_images',p.screenshots):[];
+  upsert(p);renderImages();
 }
 async function addFiles(list){
   const files=[...list];if(!files.length)return;
@@ -322,7 +334,7 @@ async function addFiles(list){
     const encoded=[];
     for(const f of files){if(f.size>20*1024*1024)throw Error('单张截图不能超过 20 MiB。');if(!['image/png','image/jpeg','image/webp'].includes(f.type))throw Error('仅支持 PNG、JPG、WebP 图片。');
       const base64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=()=>reject(Error('无法读取图片'));r.readAsDataURL(f);});encoded.push({name:f.name||'image.png',base64});}
-    const result=await api('import_images',encoded);await mergeImages(result.paths);message('截图已缓存本地，尚未发送给模型。');
+    const result=await api('import_images',encoded);await mergeImages(result.paths);message('截图草稿已自动保存，退出后可恢复；尚未发送给模型。');
   });
 }
 function openImport(){if(state.busy||state.active)return;$('#image-dialog').showModal();$('#drop-zone').focus();}
@@ -333,7 +345,7 @@ document.addEventListener('paste',e=>{if(!$('#image-dialog').open||state.busy||s
 for(const id of ['drop-zone']){const el=$('#'+id);el.ondragover=e=>{e.preventDefault();el.classList.add('drag-over');};el.ondragleave=()=>el.classList.remove('drag-over');el.ondrop=e=>{e.preventDefault();el.classList.remove('drag-over');if(state.active||state.busy)return;addFiles(e.dataTransfer.files);};}
 // Prevent WebView navigation if files are accidentally dropped outside the import panel.
 document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>e.preventDefault());
-$('#clear-images').onclick=()=>{state.images=[];state.dirty=true;renderImages();};$('#use-images').onclick=()=>$('#image-dialog').close();
+$('#clear-images').onclick=()=>task('保存截图草稿…',async()=>{state.images=[];state.dirty=true;await persistImageDraft();message('截图草稿列表已清空并保存。');});$('#use-images').onclick=()=>$('#image-dialog').close();
 $('#ai-generate').onclick=async()=>{
   if((state.profile.symbols.length||state.profile.features.length)&&!await confirmAction('生成的草稿会替换当前 Symbol 和玩法清单（保存前不会覆盖本地档案）。继续？'))return;
   await task('正在读取规则截图，识别可能需要一点时间…',async()=>{
@@ -350,10 +362,12 @@ $('#ai-generate').onclick=async()=>{
     const {name,symbols,features,notes,...details}=p;
     state.profile.rule_details=details;
     if(p.name)$('#profile-name').value=p.name;if(p.notes)$('#profile-notes').value=p.notes;
-    modified();renderRules();changeView('rules');message('规则草稿已填入。请核对名称、占格和玩法，再勾选确认并保存。');
+    modified();await persistImageDraft();renderRules();changeView('rules');message('识别草稿和截图已自动保存。请核对名称、占格和玩法，再勾选确认并保存正式规则。');
   });
 };
-$('#save-rules').onclick=()=>task('保存规则档案…',async()=>{const p=await api('save_machine',draft());upsert(p);await loadProfile(p);message(p.rules_confirmed?'规则已确认并保存。可以进入首转核验。':'草稿已保存，确认规则后再进入首转。');});
+async function saveCurrentRules(){const data=draft();data.name=data.name||'未命名机台';const p=await api('save_machine',data);upsert(p);await loadProfile(p);return p;}
+$('#save-rules').onclick=()=>task('保存规则档案…',async()=>{const p=await saveCurrentRules();message(p.rules_confirmed?'规则已确认并保存，可以继续下一步。':'规则及截图已保存，核对后勾选确认再继续。');});
+$('#rules-next').onclick=()=>task('保存规则并准备下一步…',async()=>{const p=await saveCurrentRules();const target=!state.ready?'connect':p.first_spin_verified?'capture':'verify';changeView(target);message(target==='connect'?'规则已保存。重新检测连接后即可继续核验或采集。':target==='verify'?'规则已保存。点击开始首转监听，再在游戏内手动转一次。':'规则已保存，可以设置本批次付费次数。');});
 $('#detect').onclick=()=>detect();$('#manual-connect').onclick=()=>task('按修正信息核验心跳…',async()=>{const p=draft();if(p.adapter!=='mia-bole-v1')throw Error('请先选择与当前机台匹配的采集适配器。');await connectWith(p.capture);});
 $('#verify-start').onclick=()=>startSession('first_spin');$('#capture-start').onclick=()=>startSession('sampling');
 $('#stop-capture').onclick=async()=>{if(!await confirmAction('请先在游戏内停止新增付费旋转。\n工作台只停止监听并等待奖励链，不会替你停止游戏。确认请求收尾？'))return;await task('请求本任务收尾…',async()=>{await api('stop');message('已请求收尾，请完成剩余奖励，不要新增付费旋转。','action');});};

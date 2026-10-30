@@ -14,12 +14,13 @@ const m=window.__mock;
 const wrap=f=>async(...args)=>{try{return {ok:true,data:await f(...args)}}catch(e){return {ok:false,error:{message:e.message}}}};
 function call(name,args){m.calls.push({name,args:structuredClone(args)})}
 function profile(p){return {...structuredClone(p),first_spin_verified:!!p.first_spin_verified}}
-function save(p){p=profile(p);const i=m.machines.findIndex(x=>x.id===p.id);if(i<0)m.machines.push(p);else m.machines[i]=p;m.selected=p;return p}
+function save(p){p=profile(p);delete p._draft_pending;const i=m.machines.findIndex(x=>x.id===p.id);if(i<0)m.machines.push(p);else m.machines[i]=p;m.selected=p;return p}
 function start(p,purpose,paid){save(p);m.run='X:/test-only/'+purpose+'-'+m.calls.length;m.purpose=purpose;m.events=[];
  m.status={state:purpose==='connection'?'CHECKING_CONNECTION':'WAITING_FOR_SPIN',worker_alive:true,live:true,checked_utc:new Date().toISOString(),paid:0,free:0,target_paid:paid,expected_return:0,paid_wager:0,pending_rewards:0,issue_count:0};return {profile:p,run:m.run,purpose}}
 window.pywebview={api:{
  bootstrap:wrap(()=>({version:'0.3.0',machines:m.machines,selected:m.selected,connection_ready:m.ready,run:m.run})),
  save_machine:wrap(p=>{call('save_machine',[p]);if(!p.name)throw Error('请填写机台名称');return save(p)}),
+ save_machine_draft:wrap(p=>{call('save_machine_draft',[p]);return {...p,_draft_pending:true,first_spin_verified:false}}),
  select_machine:wrap(id=>{call('select_machine',[id]);m.ready=false;m.run=null;m.selected=m.machines.find(p=>p.id===id)||null;return m.selected}),
  discover:wrap((p,device,adb)=>{call('discover',[p,device,adb]);
    if(m.stage==='choose_device'&&!device)return {stage:'choose_device',message:'多个在线模拟器，请选择。',devices:[{model:'离屏测试设备',device:'test-5554',adb:'X:/mock/adb.exe'},{model:'另一测试设备',device:'test-5556',adb:'X:/mock/adb.exe'}]};
@@ -103,6 +104,8 @@ def main():
                 page.locator('#file-input').set_input_files(dict(name=filename,mimeType='image/png',buffer=tiny_png()))
                 page.wait_for_function('!state.busy && state.images.length===1')
             assert page.locator('.image-tile').count()==1
+            assert page.evaluate('__mock.calls.some(c=>c.name==="save_machine_draft")')
+            assert not page.evaluate('__mock.calls.some(c=>c.name==="recognize")')
             page.locator('#paste-images').click();page.wait_for_function('!state.busy')
             assert page.locator('.image-tile').count()==1
             page.screenshot(path=str(output/'desktop-import.png'),full_page=True,animations='disabled')
@@ -110,15 +113,20 @@ def main():
             page.locator('#ai-generate').click();page.locator('#confirm-yes').click();page.wait_for_function('__mock.calls.some(c=>c.name==="recognize") && !state.busy')
             assert page.evaluate('__mock.calls.filter(x=>x.name==="recognize").at(-1).args[1]')=='只提取占格'
             assert not page.locator('#rules-confirmed').is_checked()
+            assert page.locator('#rules-next').is_disabled()
             assert page.locator('#symbol-rows').inner_text().startswith('Wild')
             page.locator('#rule-json').click()
             assert 'payline_count' in page.locator('#text-body').inner_text()
             assert 'capture_checklist' in page.locator('#text-body').inner_text()
             page.locator('#text-dialog .icon-button').click()
-            page.locator('#rules-confirmed').check();page.locator('#save-rules').click();page.wait_for_function('!state.busy')
+            page.locator('#rules-confirmed').check();page.locator('#rules-next').click();page.wait_for_function('!state.busy')
             assert page.evaluate('state.profile.rule_details.base_game.payline_count')==40
+            assert page.locator('#view-connect').is_visible()
+            assert not page.evaluate('__mock.calls.some(c=>c.name==="start_session")')
+            page.locator('[data-view=rules]').click()
             page.screenshot(path=str(output/'desktop-rules.png'),full_page=True,animations='disabled')
             checks.append('images: dedup, explicit paste and recognition, notes forwarded, manual confirmation reset')
+            checks.append('rule footer: save and next stay visible; screenshots persist before OCR; confirmed next saves without starting capture')
             # Failure is not called online; choose only if multiple candidates actually exist.
             page.locator('[data-view=connect]').click();page.evaluate('__mock.stage="heartbeat_missing"')
             page.locator('#detect').click();page.wait_for_function('!state.busy')
@@ -183,6 +191,9 @@ def main():
             page.wait_for_function('__mock.calls.filter(c=>c.name==="window_command").length===4')
             assert not page.evaluate('__mock.calls.some(c=>c.name==="stop")')
             checks.append('window controls: explicit minimize/maximize/restore/close bridge; close never stops capture')
+            page.evaluate('state.profile.features=Array.from({length:6},(_,i)=>({name:"玩法 "+i}));changeView("rules")')
+            assert page.locator('#feature-list button').count()==6
+            assert page.locator('#feature-pager button').count()==0
             page.evaluate('''__mock.run=null;state.run=null;state.status=null;
                 state.machines=Array.from({length:25},(_,i)=>({...state.profile,id:'test-'+i,name:'离屏长档案测试 '+i}));
                 state.profile.symbols=Array.from({length:40},(_,i)=>({name:'Symbol '+i,role:'普通',size:'1x1'}));

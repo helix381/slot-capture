@@ -94,6 +94,33 @@ class DesktopTests(unittest.TestCase):
         self.assertFalse(self.api.import_images([dict(name='bad.png',base64='aaaa')])['ok'])
         self.assertFalse(self.api.preview_images([str(self.store.parent/'escape.png')])['ok'])
 
+    def test_unrecognized_images_restore_as_draft_and_never_overwrite_approved_profile(self):
+        self.data(self.api.save_machine(self.profile))
+        original=(self.store/'machines'/'mia.json').read_bytes()
+        b=io.BytesIO();Image.new('RGB',(12,12),'white').save(b,format='PNG')
+        paths=self.data(self.api.import_images([dict(name='rule.png',base64=base64.b64encode(b.getvalue()).decode())]))['paths']
+        p=dict(self.profile,name='尚未确认的新名字',screenshots=paths)
+        saved=self.data(self.api.save_machine_draft(p))
+        self.assertTrue(saved['_draft_pending'])
+        self.assertEqual((self.store/'machines'/'mia.json').read_bytes(),original)
+        fresh=DesktopAPI(self.store,self.command)
+        restored=self.data(fresh.bootstrap())['selected']
+        self.assertEqual(restored['name'],'尚未确认的新名字');self.assertTrue(restored['_draft_pending'])
+        self.assertTrue(Path(restored['screenshots'][0]).is_file())
+        self.assertIn('rule-images',restored['screenshots'][0])
+        approved=self.data(fresh.save_machine(restored))
+        self.assertNotIn('_draft_pending',approved)
+        self.assertFalse((self.store/'machine-drafts'/'mia.json').exists())
+
+    def test_new_draft_can_be_deleted_and_restored_without_ocr_or_formal_profile(self):
+        draft=dict(self.profile,name='',symbols=[],features=[],rules_confirmed=False,screenshots=[])
+        self.data(self.api.save_machine_draft(draft))
+        self.assertEqual(len(self.data(self.api.bootstrap())['machines']),1)
+        self.assertEqual(self.data(self.api.delete_machine('mia'))['kind'],'draft')
+        self.assertEqual(self.data(self.api.bootstrap())['machines'],[])
+        restored=self.data(self.api.restore_machine())
+        self.assertTrue(restored['_draft_pending']);self.assertEqual(restored['symbols'],[])
+
     def test_vision_only_runs_on_explicit_request_and_forwards_notes(self):
         save_profile(self.store,self.profile)
         with patch('slotcapture.vision_api.recognize',return_value=dict(draft={},requires_confirmation=True)) as mock:

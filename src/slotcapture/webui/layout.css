@@ -79,3 +79,13 @@ body.desktop-app{height:100dvh;min-height:0;min-width:960px;overflow:hidden}
 .desktop-app .drop-mini{display:flex;flex-direction:row;text-align:left;justify-content:flex-start;gap:9px;height:64px;padding:9px 10px;border:1px solid #ddd6ce;background:#ffffff8c;border-radius:9px}
 .desktop-app .drop-mini>i{width:16px;height:16px;flex:none}.desktop-app .drop-mini>span{min-width:0}.desktop-app .drop-mini strong{display:block;font-size:12px;line-height:1.6}.desktop-app .drop-mini small{display:block;margin-top:4px;font-size:10px;line-height:1.5;white-space:normal}.desktop-app .drop-mini>i:last-child{margin-left:auto;width:13px;height:13px}
 .desktop-app #vision-settings-open{margin-left:auto;font-size:11px;white-space:nowrap}.desktop-app .api-fields{margin:0;padding:0}.desktop-app #vision-model-label{display:block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Six common features fit without a page turn; save and next are always in the footer. */
+.desktop-app #view-rules{grid-template-rows:70px minmax(0,1fr) 124px 76px}
+.desktop-app .feature-card{grid-template-rows:22px 64px;gap:8px;padding-block:10px}
+.desktop-app .feature-list{grid-template-rows:repeat(2,28px);align-content:start}
+.desktop-app .save-bar{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:22px 40px;gap:8px;align-content:center;align-items:stretch;justify-content:stretch}
+.rule-confirmation{display:flex;gap:12px;align-items:center;min-width:0}.rule-confirmation .checkbox{flex:none}.rule-confirmation #rule-save-state{margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#777078}
+.rule-actions{display:flex;justify-content:space-between;gap:12px}.desktop-app .rule-actions button{height:40px;min-height:40px}
+#capture-storage{font-size:10px;font-weight:400;color:#777078;margin-left:8px}
+@media(max-height:700px){.desktop-app #view-rules{grid-template-rows:64px minmax(0,1fr) 116px 72px}.desktop-app .feature-card{padding-block:6px}.rule-confirmation #rule-save-state{font-size:10px}}
