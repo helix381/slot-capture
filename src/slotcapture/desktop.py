@@ -76,8 +76,9 @@ class DesktopAPI:
         selected=next((p for p in machines if p['id']==self._session.get('selected_id')),machines[0] if machines else None)
         ready=bool(selected and self._connection and connection_ready(selected,self._connection))
         if not ready:self._connection=None
+        from .vision_api import status as vision_status
         return dict(version=__version__,machines=machines,selected=selected,run=self._run,
-                    connection_ready=ready,diagnostic=self._diagnostic)
+                    connection_ready=ready,diagnostic=self._diagnostic,vision=vision_status(self._store))
 
     @response
     def select_machine(self,identity):
@@ -207,10 +208,25 @@ class DesktopAPI:
         if not paths or len(paths)>12:raise ValueError('请选择1至12张规则截图')
         for path in paths:
             if not Path(path).resolve().is_relative_to(self._store):raise ValueError('图片尚未导入本地档案库')
-        args=['vision-read']
+        args=['vision-read','--provider','responses']
         for path in paths:args+=['--image',path]
         if notes:args+=['--notes',notes[:4000]]
         return self._cli(*args)
+
+    @response
+    def vision_settings(self):
+        from .vision_api import status
+        return status(self._store)
+
+    @response
+    def save_vision_settings(self,settings,key=''):
+        from .vision_api import save
+        return save(self._store,settings,key)
+
+    @response
+    def vision_models(self):
+        from .vision_api import models
+        return models(self._store)
 
     @response
     def open_history(self):

@@ -2,6 +2,7 @@
   "checks": [
     "bootstrap: empty real UI; no automatic discovery, model or clipboard calls",
     "rules: manual edit, safe text rendering, saved without network, sampling gated",
+    "vision: compact import opener, explicit API settings, inventory selection without automatic inference",
     "images: dedup, explicit paste and recognition, notes forwarded, manual confirmation reset",
     "connection: failure, multi-device choice, live heartbeat proof gates first spin",
     "next step: explicit gated destination; navigation does not start a spin or capture",

@@ -34,13 +34,16 @@ window.pywebview={api:{
  restore_machine:wrap(()=>{call('restore_machine',[]);m.run=null;return save(m.deleted)}),
  import_images:wrap(async files=>{call('import_images',[files.map(f=>f.name)]);const paths=[];for(const f of files){const bytes=Uint8Array.from(atob(f.base64),c=>c.charCodeAt(0));const sha=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(b=>b.toString(16).padStart(2,'0')).join('');const path='X:/mock/'+sha+'.png';m.images[path]={path,name:f.name,sha256:sha,preview:'data:image/png;base64,'+f.base64};paths.push(path)}return {paths:[...new Set(paths)]}}),
  preview_images:wrap(paths=>paths.map(path=>m.images[path])),
- recognize:wrap((paths,notes)=>{call('recognize',[paths,notes]);return {requires_confirmation:true,draft:{name:'离屏测试机台',symbols:[{name:'Wild',role:'替代',size:'1x5',notes:'测试草稿'}],features:[{name:'Free Game',notes:'测试草稿'}],notes:'待人工核对'}}}),
+ recognize:wrap((paths,notes)=>{call('recognize',[paths,notes]);return {requires_confirmation:true,draft:{schema_version:'slot-rule-extraction/v1',name:'离屏测试机台',symbols:[{name:'Wild',role:'替代',size:'1x5',notes:'测试草稿'}],features:[{name:'Free Game',notes:'测试草稿'}],base_game:{payline_count:40},free_game:{initial_spins:null},payouts:[],capture_checklist:[{topic:'线奖',runtime_check:'核验3/4/5连'}],unknowns:['待运行时映射'],notes:'待人工核对'}}}),
  paste_images:wrap(()=>{call('paste_images',[]);return {paths:Object.keys(m.images).slice(0,1)}}),
  open_local:wrap(kind=>{call('open_local',[kind]);return {opened:true}}),
  open_history:wrap(()=>{call('open_history',[]);return {cancelled:true}}),
  export:wrap(()=>{call('export',[]);return {output:'X:/mock/export'}}),
  window_command:wrap(action=>{call('window_command',[action]);if(action==='maximize')m.maximized=!m.maximized;return {maximized:!!m.maximized}}),
- resize_window:wrap((w,h)=>{call('resize_window',[w,h]);return {}})
+ resize_window:wrap((w,h)=>{call('resize_window',[w,h]);return {}}),
+ vision_settings:wrap(()=>m.vision||{base_url:'',selection:'manual',model:'gpt-6-luna',reasoning_effort:'medium',key_present:false,configured:false}),
+ save_vision_settings:wrap((settings,key)=>{call('save_vision_settings',[settings,'[redacted]']);m.vision={...settings,key_present:!!key,configured:!!key};return m.vision}),
+ vision_models:wrap(()=>{call('vision_models',[]);m.vision.model='gpt-4.1-nano';return {models:['gpt-4.1-nano','gpt-5.6'],settings:m.vision,selection_required:false}})
 }};
 m.finish=()=>{m.status.state='COMPLETE';m.status.worker_alive=false;m.status.live=false;m.status.checked_utc=new Date().toISOString();
  if(m.purpose==='connection')m.ready=true;
@@ -81,6 +84,19 @@ def main():
             page.locator('#rules-confirmed').check();page.locator('#save-rules').click();page.wait_for_function('!state.busy')
             assert page.locator('#capture-start').is_disabled()
             checks.append('rules: manual edit, safe text rendering, saved without network, sampling gated')
+            assert page.locator('#open-import').bounding_box()['height']<=72
+            assert '打开' in page.locator('#open-import').inner_text()
+            page.locator('#vision-settings-open').click();page.wait_for_function('!state.busy')
+            page.locator('#vision-base-url').fill('https://example.invalid/openai')
+            page.locator('#vision-api-key').fill('fake-key-for-headless-test')
+            page.locator('#vision-settings-save').click();page.wait_for_function('!state.busy')
+            assert page.locator('#vision-api-key').input_value()==''
+            assert page.locator('#vision-model').input_value()=='gpt-6-luna'
+            assert page.locator('#vision-effort').input_value()=='medium'
+            assert not page.evaluate('__mock.calls.some(c=>c.name==="vision_models")')
+            assert not page.evaluate('__mock.calls.some(c=>c.name==="recognize")')
+            page.locator('#vision-settings-dialog .icon-button').click()
+            checks.append('vision: compact import opener, explicit API settings, inventory selection without automatic inference')
             # Local importer, dedupe and explicit recognition bridge.
             page.locator('#open-import').click()
             for filename in ['rule.png','duplicate.png']:
@@ -95,7 +111,12 @@ def main():
             assert page.evaluate('__mock.calls.filter(x=>x.name==="recognize").at(-1).args[1]')=='只提取占格'
             assert not page.locator('#rules-confirmed').is_checked()
             assert page.locator('#symbol-rows').inner_text().startswith('Wild')
+            page.locator('#rule-json').click()
+            assert 'payline_count' in page.locator('#text-body').inner_text()
+            assert 'capture_checklist' in page.locator('#text-body').inner_text()
+            page.locator('#text-dialog .icon-button').click()
             page.locator('#rules-confirmed').check();page.locator('#save-rules').click();page.wait_for_function('!state.busy')
+            assert page.evaluate('state.profile.rule_details.base_game.payline_count')==40
             page.screenshot(path=str(output/'desktop-rules.png'),full_page=True,animations='disabled')
             checks.append('images: dedup, explicit paste and recognition, notes forwarded, manual confirmation reset')
             # Failure is not called online; choose only if multiple candidates actually exist.

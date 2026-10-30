@@ -130,7 +130,9 @@ def parser():
             c.add_argument('--purpose', choices=['connection', 'first_spin', 'sampling'], required=True)
             c.add_argument('--run', required=True); c.add_argument('--paid', type=int, default=1)
             c.add_argument('--connection')
-        if name in ('vision-status', 'vision-read'): c.add_argument('--codex')
+        if name in ('vision-status', 'vision-read'):
+            c.add_argument('--codex')
+            c.add_argument('--provider',choices=['codex','responses'],default='codex')
         if name == 'vision-read':
             c.add_argument('--image', action='append', required=True); c.add_argument('--model')
             c.add_argument('--notes',default='')
@@ -155,6 +157,9 @@ def run(args):
         if command == 'machine-restore': return restore_profile(store,args.id,args.deleted)
         if command == 'session-prepare':
             return prepare_session(store, args.id, args.purpose, args.run, args.paid, args.connection)
+        if command in ('vision-status','vision-read') and args.provider=='responses':
+            from .vision_api import status as api_status,recognize as api_recognize
+            return api_status(store) if command=='vision-status' else api_recognize(args.image,store,args.notes)
         from .vision import codex_status, recognize
         if command == 'vision-status': return codex_status(args.codex)
         if command == 'vision-read': return recognize(args.image, store, args.codex, args.model,args.notes)
@@ -229,6 +234,9 @@ def main():
         if args.command in ['replay','audit'] and not data.get('complete',False):return 3
         return 0
     except (ValueError,FileExistsError,FileNotFoundError) as exc:
+        if isinstance(exc, FileNotFoundError):
+            import traceback
+            traceback.print_exc(file=sys.stderr)
         output(exc,False,'invalid_input');return 2
     except Exception as exc:
         output(exc,False,'runtime_failure');return 4

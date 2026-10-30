@@ -26,6 +26,20 @@
 
 ## 运行与验证边界
 
-`dist/slot-capture-gui.exe`与`dist/slot-capture.exe`需放在一起。图形壳依赖Windows的.NET Framework与Edge WebView2 Runtime，Python及应用库已打包。CLI参数保持兼容；识图增加可选`--notes`，仍默认Luna / low。
+`dist/slot-capture-gui.exe`与`dist/slot-capture.exe`需放在一起。图形壳依赖Windows的.NET Framework与Edge WebView2 Runtime，Python及应用库已打包。CLI参数保持兼容；旧Codex CLI识图入口仍可用，GUI改用用户配置的Responses API。
+
+## 识图 API
+
+规则助手提供紧凑的“打开截图导入面板”按钮；打开面板后可粘贴、拖入或选择文件。API设置填写供应商地址和密钥，不修改Codex全局配置。密钥由Windows DPAPI加密保存，只在当前Windows账户内使用；界面不会回显已保存密钥。也可使用用户指定的`ANTHROPIC_API_KEY`环境变量。
+
+当前默认固定为`gpt-6-luna / medium`。“保存设置”不会查询模型列表，直接配置`/responses`调用；“读取模型列表”是独立的可选操作，不能用它的成败代替识图请求验证。思考深度随设置保存，不再硬编码low。桌面程序也会读取当前Windows用户环境中的密钥，避免启动时继承的旧PATH/环境变量造成误判。
+
+用户点击“生成规则草稿”才向`/responses`发送截图和说明，要求JSON草稿，仍须人工核对保存。`vision-status --provider responses`只读本地配置状态；`vision-read --provider responses --image FILE --store DIR`使用同一设置。密钥不出现在CLI参数、导出账本或研究报告中。
+
+## 规则识别契约
+
+固定提示词与JSON schema位于`src/slotcapture/rule_prompt.py`，版本`slot-rule-extraction/v1`。重点是Symbol身份/占格/能力、Base轴行与线奖规则、3/4/5连赔率及其基准、Free触发/次数/倍率/结算、其他玩法的触发/进度/奖励。每项保留图片编号，未知数字为null，缺失或冲突进入待确认项；不推断协议ID、后台概率或RTP。
+
+JSON同时包含`capture_checklist`，将截图事实和下一步首转需要核验的事项分开。客户端再校验完整结构，字段缺失或类型错误时不导入。识别结果完整保存在`vision-jobs/批次/draft.json`，模型、思考深度、提示词版本和图片顺序见相邻manifest。界面把清单和详细规则直接带入档案，可点“识别详情 / JSON”查看；修改详细规则也会使该规则版本的旧首转证据失效。
 
 自动回归使用临时数据、假设备和假的识图接口；页面交互使用无界面的独立Edge上下文。不自动打开工作台、不连接用户模拟器、不读真实剪贴板、不消耗识图额度。用户现场验收仍需覆盖WebView2壳启动、当前设备连接、一次真实首转及自动采集。

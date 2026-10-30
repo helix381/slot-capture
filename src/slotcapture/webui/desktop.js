@@ -31,6 +31,7 @@ let noticeTimer,lastNoticeKey=null,dismissedNoticeKey=null;
 function dismissNotice(){dismissedNoticeKey=lastNoticeKey;$('#work-status').hidden=true;clearTimeout(noticeTimer);}
 function toast(text){if($('#status-message').textContent!==text)message(text);}
 function message(text,kind='',key=null){
+  if($('#vision-settings-dialog')?.open)$('#vision-settings-note').textContent=text;
   const el=$('#work-status');key=key||kind+':'+text;
   $('#status-message').textContent=text;$('#status-details').title=text;el.className=kind;
   if(key===lastNoticeKey){el.hidden=!text||dismissedNoticeKey===key;return;}
@@ -72,6 +73,8 @@ function gates(){
   $('#capture-start').disabled=locked||!state.ready||state.dirty||!p?.first_spin_verified;
   $('#verify-start').disabled=locked||!state.ready||state.dirty||!p?.rules_confirmed||!p?.symbols?.length;
   $('#verified-shortcut').hidden=!p?.first_spin_verified||state.dirty;
+  for(const id of ['vision-settings-open','vision-settings-save','vision-refresh-models','vision-base-url','vision-api-key','vision-selection','vision-effort'])$('#'+id).disabled=locked;
+  $('#vision-model').disabled=locked||$('#vision-selection').value==='automatic';
   const next=$('#connection-next');let target='rules',label='下一步：确认规则';
   let title='下一步：确认规则',description='先点击“自动检测并连接”，等待游戏心跳核验通过。';
   if(state.active){
@@ -92,7 +95,7 @@ async function task(text,fn){
   if(state.busy){toast('上一步仍在执行，请稍候。');return;}
   state.busy=true;gates();
   while(state.polling)await new Promise(resolve=>setTimeout(resolve,30));
-  message(text);
+  message(text,'progress');
   try{await fn();}catch(e){message(e.message,'error');toast(e.message);}
   finally{state.busy=false;gates();}
 }
@@ -327,16 +330,25 @@ for(const id of ['open-import','import-main'])$('#'+id).onclick=openImport;
 $('#pick-files').onclick=()=>$('#file-input').click();$('#file-input').onchange=async e=>{await addFiles(e.target.files);e.target.value='';};
 $('#paste-images').onclick=()=>task('读取你主动粘贴的截图…',async()=>{const result=await api('paste_images');await mergeImages(result.paths);message('截图已缓存本地，尚未发送给模型。');});
 document.addEventListener('paste',e=>{if(!$('#image-dialog').open||state.busy||state.active)return;const files=[...(e.clipboardData?.files||[])];if(files.length){e.preventDefault();addFiles(files);}else if(!['INPUT','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();$('#paste-images').click();}});
-for(const id of ['drop-zone','open-import']){const el=$('#'+id);el.ondragover=e=>{e.preventDefault();el.classList.add('drag-over');};el.ondragleave=()=>el.classList.remove('drag-over');el.ondrop=e=>{e.preventDefault();el.classList.remove('drag-over');if(state.active||state.busy)return;if(!$('#image-dialog').open)openImport();addFiles(e.dataTransfer.files);};}
+for(const id of ['drop-zone']){const el=$('#'+id);el.ondragover=e=>{e.preventDefault();el.classList.add('drag-over');};el.ondragleave=()=>el.classList.remove('drag-over');el.ondrop=e=>{e.preventDefault();el.classList.remove('drag-over');if(state.active||state.busy)return;addFiles(e.dataTransfer.files);};}
 // Prevent WebView navigation if files are accidentally dropped outside the import panel.
 document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>e.preventDefault());
 $('#clear-images').onclick=()=>{state.images=[];state.dirty=true;renderImages();};$('#use-images').onclick=()=>$('#image-dialog').close();
 $('#ai-generate').onclick=async()=>{
   if((state.profile.symbols.length||state.profile.features.length)&&!await confirmAction('生成的草稿会替换当前 Symbol 和玩法清单（保存前不会覆盖本地档案）。继续？'))return;
   await task('正在读取规则截图，识别可能需要一点时间…',async()=>{
-    const result=await api('recognize',state.images.map(i=>i.path),$('#ai-note').value);const p=result.draft;
+    const button=$('#ai-generate'),original=button.innerHTML,started=Date.now();
+    button.setAttribute('aria-busy','true');
+    const update=()=>{button.textContent=`正在识别… ${Math.floor((Date.now()-started)/1000)}秒`;};
+    update();const timer=setInterval(update,1000);
+    let result;
+    try{result=await api('recognize',state.images.map(i=>i.path),$('#ai-note').value);}
+    finally{clearInterval(timer);button.innerHTML=original;button.removeAttribute('aria-busy');}
+    const p=result.draft;
     if(!p||!Array.isArray(p.symbols)||!Array.isArray(p.features))throw Error('识图未返回有效草稿，原档案未改动。');
     state.profile.symbols=p.symbols;state.profile.features=p.features;
+    const {name,symbols,features,notes,...details}=p;
+    state.profile.rule_details=details;
     if(p.name)$('#profile-name').value=p.name;if(p.notes)$('#profile-notes').value=p.notes;
     modified();renderRules();changeView('rules');message('规则草稿已填入。请核对名称、占格和玩法，再勾选确认并保存。');
   });
@@ -358,9 +370,46 @@ $('#spin-count').oninput=renderMetrics;
 $('#add-symbol').onclick=()=>editRow('symbols');$('#add-feature').onclick=()=>editRow('features');
 $('#connection-options').onclick=()=>$('#connection-dialog').showModal();
 $('#edit-notes').onclick=()=>$('#notes-dialog').showModal();
+$('#rule-json').onclick=()=>{
+  $('#text-title').textContent='识别结果 JSON / 首转核验底稿';
+  $('#text-body').textContent=JSON.stringify({name:$('#profile-name').value,symbols:state.profile?.symbols||[],features:state.profile?.features||[],...(state.profile?.rule_details||{}),notes:$('#profile-notes').value},null,2);
+  $('#text-dialog').showModal();
+};
 $('#show-events').onclick=()=>{state.pages.events=0;renderFullEvents();$('#events-dialog').showModal();};
 function showStatus(){if(!$('#status-message').textContent)return;$('#text-title').textContent='状态详情';$('#text-body').textContent=$('#status-message').textContent;$('#text-dialog').showModal();}
 $('#status-details').onclick=showStatus;$('#status-close').onclick=dismissNotice;
+function showVision(settings){
+  $('#vision-base-url').value=settings.base_url||'';$('#vision-selection').value=settings.selection||'manual';
+  $('#vision-effort').value=settings.reasoning_effort||'medium';
+  const model=settings.model||'';
+  if(model&&![...$('#vision-model').options].some(o=>o.value===model)){const option=node('option');option.value=model;option.textContent=model;$('#vision-model').append(option);}
+  $('#vision-model').value=model;$('#vision-api-key').value='';
+  $('#vision-api-key').placeholder=settings.key_present?'密钥已保存；留空保留，填写新值替换':'请输入完整供应商密钥';
+  $('#vision-model-label').textContent=settings.model?settings.model+' · '+(settings.reasoning_effort||'medium'):'请设置识图模型';
+  $('#vision-model-label').title=settings.selection_note||'';gates();
+}
+async function refreshVisionModels(){
+  const result=await api('vision_models');showVision(result.settings);$('#vision-model').replaceChildren();
+  const placeholder=node('option');placeholder.value='';placeholder.textContent='请选择识图模型';$('#vision-model').append(placeholder);
+  const ids=[...new Set([...result.models,...(result.settings.model?[result.settings.model]:[])])];
+  for(const id of ids){const option=node('option');option.value=id;option.textContent=id;$('#vision-model').append(option);}
+  $('#vision-model').value=result.settings.model||'';
+  if(result.selection_required){$('#vision-selection').value='manual';gates();message(result.message,'action');}
+  else message(`已读取供应商模型列表，当前识图模型：${result.settings.model}。尚未发起识图请求。`);
+  return result;
+}
+$('#vision-settings-open').onclick=()=>task('读取识图设置…',async()=>{showVision(await api('vision_settings'));$('#vision-settings-dialog').showModal();message('填写密钥并保存即可识图，固定模型无需读取模型列表。');});
+$('#vision-selection').onchange=gates;
+async function saveVisionSettings(readModels=false){await task('保存识图API设置…',async()=>{
+  const settings={base_url:$('#vision-base-url').value,selection:$('#vision-selection').value,model:$('#vision-model').value,reasoning_effort:$('#vision-effort').value};
+  const result=await api('save_vision_settings',settings,$('#vision-api-key').value);showVision(result);
+  if(result.configured){
+    if(readModels||settings.selection==='automatic'){const models=await refreshVisionModels();if(!models.selection_required)message('设置已保存，模型已选择。关闭设置后可生成规则草稿。');}
+    else message(`设置已保存：${result.model} / ${result.reasoning_effort}。关闭设置后可直接识图。`);
+  }else message('地址和模型已保存，请填写完整密钥。','action');
+});}
+$('#vision-settings-save').onclick=()=>saveVisionSettings();
+$('#vision-refresh-models').onclick=()=>saveVisionSettings(true);
 $('#connection-next').onclick=()=>{if(!$('#connection-next').disabled)changeView($('#connection-next').dataset.target);};
 async function windowCommand(action){
   try{const result=await api('window_command',action);document.body.classList.toggle('window-maximized',result.maximized);}
@@ -385,7 +434,7 @@ $$('[data-view]').forEach(b=>b.onclick=()=>changeView(b.dataset.view));$$('[data
 let booted=false;
 async function bootstrap(){
   if(booted)return;booted=true;
-  await task('读取本地工作空间…',async()=>{const d=await api('bootstrap');state.machines=d.machines;state.ready=d.connection_ready;state.run=d.run;$('#app-version').textContent='v'+d.version;await loadProfile(d.selected);renderConnection();message('先在模拟器中打开准备采集的机台，再检测连接。');});
+  await task('读取本地工作空间…',async()=>{const d=await api('bootstrap');state.machines=d.machines;state.ready=d.connection_ready;state.run=d.run;$('#app-version').textContent='v'+d.version;await loadProfile(d.selected);if(d.vision)showVision(d.vision);renderConnection();message('先在模拟器中打开准备采集的机台，再检测连接。');});
   if(location.hash)changeView(location.hash.slice(1));
   else changeView('connect');
   await poll();setInterval(poll,2000);

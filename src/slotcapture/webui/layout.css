@@ -73,3 +73,9 @@ body.desktop-app{height:100dvh;min-height:0;min-width:960px;overflow:hidden}
 #status-details{flex:1;min-width:0;padding:3px 0;background:transparent;color:inherit;text-align:left;font:inherit;line-height:1.7}#status-message{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 #status-close{flex:none;display:grid;place-items:center;width:28px;height:28px;padding:5px;background:transparent;color:inherit;border-radius:6px}#status-close:hover{background:#ffffff20}#status-close svg{width:15px;height:15px}
 @media(max-height:700px){.desktop-app .workspace{grid-template-rows:58px 60px minmax(0,1fr) 18px}.desktop-app .workspace.connection-page{grid-template-rows:58px minmax(0,1fr) 18px}.desktop-app #view-connect{grid-template-rows:auto 86px 38px 76px}.desktop-app #view-connect .hero{padding:16px 18px;gap:16px 12px}}
+
+/* Import is a button opening a dedicated paste/drop surface, not a fake drop area. */
+.desktop-app .ai-panel{height:auto;align-self:start;grid-template-rows:24px 64px 24px 112px 30px;gap:12px}
+.desktop-app .drop-mini{display:flex;flex-direction:row;text-align:left;justify-content:flex-start;gap:9px;height:64px;padding:9px 10px;border:1px solid #ddd6ce;background:#ffffff8c;border-radius:9px}
+.desktop-app .drop-mini>i{width:16px;height:16px;flex:none}.desktop-app .drop-mini>span{min-width:0}.desktop-app .drop-mini strong{display:block;font-size:12px;line-height:1.6}.desktop-app .drop-mini small{display:block;margin-top:4px;font-size:10px;line-height:1.5;white-space:normal}.desktop-app .drop-mini>i:last-child{margin-left:auto;width:13px;height:13px}
+.desktop-app #vision-settings-open{margin-left:auto;font-size:11px;white-space:nowrap}.desktop-app .api-fields{margin:0;padding:0}.desktop-app #vision-model-label{display:block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

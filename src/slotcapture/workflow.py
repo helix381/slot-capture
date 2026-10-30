@@ -37,6 +37,7 @@ def profile_path(store, identity):
 
 def revision(profile):
     content = {k: profile.get(k) for k in ('name', 'adapter', 'symbols', 'features', 'notes', 'rules_confirmed')}
+    if 'rule_details' in profile:content['rule_details']=profile['rule_details']
     return hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 

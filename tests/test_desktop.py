@@ -96,11 +96,11 @@ class DesktopTests(unittest.TestCase):
 
     def test_vision_only_runs_on_explicit_request_and_forwards_notes(self):
         save_profile(self.store,self.profile)
-        with patch('slotcapture.vision.recognize',return_value=dict(draft={},requires_confirmation=True)) as mock:
+        with patch('slotcapture.vision_api.recognize',return_value=dict(draft={},requires_confirmation=True)) as mock:
             self.data(self.api.bootstrap());mock.assert_not_called()
             self.assertFalse(self.api.recognize([str(self.store.parent/'escape.png')])['ok'])
             self.data(self.api.recognize([str(self.store/'image.png')],'只提取占格'))
-            self.assertEqual(mock.call_args.args[4],'只提取占格')
+            self.assertEqual(mock.call_args.args[2],'只提取占格')
 
     def test_session_rejects_invalid_targets_and_unknown_purposes(self):
         for n in (0,-1,True,1.5,1000001):self.assertFalse(self.api.start_session(self.profile,'sampling',n)['ok'])
